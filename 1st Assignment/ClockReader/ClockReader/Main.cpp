@@ -22,31 +22,64 @@ int main() {
 
 	// IMAGE READING -------------------------------
 	// Reads the image
-	Mat src = imread("./Resources/img2.jpg");
+	Mat src = imread("./Resources/img1.jpg");
 
 	// Verify reading success
 	if (!src.data) {
 		cout << "Image reading error!" << endl;
+
+		// Wait for key press
+		waitKey(0);
 		return 1;
 	}
 
 	// IMAGE PREPARATION ---------------------------
+	// Increases image contrast and brightness for clearer edge detection
+	Mat srcContrast = Mat::zeros(src.size(), src.type());
+	for (int y = 0; y < src.rows; y++) {
+		for (int x = 0; x < src.cols; x++) {
+			for (int c = 0; c < 3; c++) {
+				srcContrast.at<Vec3b>(y, x)[c] =
+					saturate_cast<uchar>(2.2*(src.at<Vec3b>(y, x)[c]) - 100);
+			}
+		}
+	}
+
 	// Noise removal with Gaussian blur
 	Mat srcBlur;
-	GaussianBlur(src, srcBlur, Size(3, 3), 0, 0, BORDER_DEFAULT);
+	GaussianBlur(srcContrast, srcBlur, Size(3, 3), 2, 2);
 
-	// Convert image to grayscale
+	// Mean filters the color
+	Mat srcMeanFilter;
+	pyrMeanShiftFiltering(srcBlur, srcMeanFilter, 10, 40, 5);
+
+	// Converts image to gray scale
 	Mat srcGray;
-	cvtColor(srcBlur, srcGray, CV_BGR2GRAY);
+	cvtColor(srcMeanFilter, srcGray, CV_BGR2GRAY);
 
-	// Apply Laplacian operator
-	Mat srcLaplacian;
-	Laplacian(srcGray, srcLaplacian, CV_8U, 3, 1, 0, BORDER_DEFAULT);
+	// Transforms image to binary
+	Mat srcThreshold;
+	threshold(srcGray, srcThreshold, 150, 255, THRESH_BINARY);
+
+	//morphologyEx(srcThreshold, srcThreshold, MORPH_CLOSE, Mat(), Point(-1, -1), 4);
+
+	// Apply Canny edge detection
+	Mat srcCanny;
+	//Canny(srcThreshold, srcCanny, 100, 100, 3);
+	Laplacian(srcThreshold, srcCanny, CV_8UC1, 3, 1, 0, BORDER_CONSTANT);
 
 	// CLOCK SEGMENTATION --------------------------
 	// Find all clock contours
 	vector<vector<Point>> contours;
-	findContours(srcLaplacian, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+	findContours(srcCanny, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE, Point(0, 0));
+
+	RNG rng(12345);
+	vector<Vec4i> hierarchy;
+	Mat drawing = Mat::zeros(srcCanny.size(), CV_8UC3);
+	for (int i = 0; i< contours.size(); i++) {
+		Scalar color = Scalar(rng.uniform(0, 255), rng.uniform(0, 255), rng.uniform(0, 255));
+		drawContours(drawing, contours, i, color, 2, 8, hierarchy, 0, Point());
+	}
 
 	// Find the area of larger contour
 	double maxArea = 0;
@@ -60,6 +93,27 @@ int main() {
 		}
 	}
 
+
+
+
+	vector<vector<Point>> relevantContourVec = vector<vector<Point>>();
+	relevantContourVec.push_back(relevantContour);
+
+	
+
+	//vector<vector<Point> > contours;
+	
+	findContours(srcCanny, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
+
+	
+
+
+
+
+
+
+
+
 	// Select inner larger contour
 	double minArea = maxArea;
 	for (int i = 0; i< contours.size(); i++) {
@@ -71,7 +125,7 @@ int main() {
 	}
 
 	// Clock inner contour
-	vector<vector<Point>> relevantContourVec = vector<vector<Point>>();
+	//vector<vector<Point>> relevantContourVec = vector<vector<Point>>();
 	relevantContourVec.push_back(relevantContour);
 
 	// Create clock mask to segment the background
@@ -89,12 +143,18 @@ int main() {
 	// DEBUGGING -----------------------------------
 	// Show the image
 	imshow("Original", src);
-	imshow("Blur", srcBlur);
-	imshow("Gray", srcGray);
-	imshow("Laplacian", srcLaplacian);
-	imshow("Raw Mask", srcRawMask);
-	imshow("Mask", srcMask);
-	imshow("Clock", srcClock);
+	//imshow("Contrast", srcContrast);
+	//imshow("Blur", srcBlur);
+	//imshow("Mean Filter", srcMeanFilter);
+	//imshow("Gray", srcGray);
+	imshow("Threshold", srcThreshold);
+	imshow("Canny", srcCanny);
+
+	//imshow("Raw Mask", srcRawMask);
+	//imshow("Mask", srcMask);
+	//imshow("Clock", srcClock);
+
+	imshow("Contours", drawing);
 
 	// Wait for key press
 	waitKey(0);
