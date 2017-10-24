@@ -2,21 +2,61 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
+#include <iostream>
+#include <string>
 
 using namespace std;
 using namespace cv;
 
-/*
-// Using this to debug
+const int NEW_WIDTH = 400;
 
-for (int i = 300; i < 450; i = i + 10) {
-	Mat temp;
-	Canny(srcBlur, temp, 50, i, 3);
-	string str = "";
-	str += to_string(i);
-	imshow(str, temp);
+//resizes the image to width defined by second argument, height set proportionaly
+Mat resizeImage(Mat original, int newWidth) {
+	Mat resizedImage;
+	Size newSize;
+
+	newSize.width = newWidth;
+	newSize.height = newWidth*1.0 / original.size().width*original.size().height;	
+	cv::resize(original, resizedImage, newSize);
+	return resizedImage;
 }
-*/
+
+//returns an image that was taken wth camera or loaded from path specified in console
+Mat getImage() {
+	char mode;
+	Mat src;
+	while (true) {
+		cout << "Please select mode : (C for camera input, P for path):";
+		cin >> mode;
+		cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		if (tolower(mode) == 'c') {
+			cout << "camera mode";
+			break;
+		}
+		else if (tolower(mode) == 'p') {
+			string imPath;
+
+			while (true) {
+
+				cout << "enter a path:";
+				getline(cin, imPath);
+				cout << imPath;
+
+				src = imread(imPath);
+				// Verify reading success
+				if (src.data) {
+					return resizeImage(src, NEW_WIDTH);
+				}
+			}
+		}
+		else {
+			cout << "You entered wrong character";
+			cout << "\n";
+		}
+	}
+	//-------------------------------------------------replace
+	return src;
+}
 
 int main() {
 
@@ -24,7 +64,7 @@ int main() {
 
 	// IMAGE READING -------------------------------
 	// Reads the image
-	Mat src = imread("./Resources/img2.jpg");
+	Mat src = getImage();
 
 	// Verify reading success
 	if (!src.data) {
