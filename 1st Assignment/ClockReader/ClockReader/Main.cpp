@@ -20,6 +20,8 @@ for (int i = 300; i < 450; i = i + 10) {
 
 int main() {
 
+	// duje
+
 	// IMAGE READING -------------------------------
 	// Reads the image
 	Mat src = imread("./Resources/img2.jpg");
