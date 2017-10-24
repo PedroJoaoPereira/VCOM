@@ -29,10 +29,30 @@ Mat getImage() {
 		cout << "Please select mode : (C for camera input, P for path):";
 		cin >> mode;
 		cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+
 		if (tolower(mode) == 'c') {
-			cout << "camera mode";
-			break;
+			cout << "Press ESC key to take picture";
+			VideoCapture cap;
+			// open the default camera, use something different from 0 otherwise;
+			// Check VideoCapture documentation.
+			if (!cap.open(0))
+				break;
+			for (;;)
+			{
+				
+				cap >> src;
+				if (src.empty()) break; // end of video stream
+				imshow("Take a picture with ESC key", src);
+				if (waitKey(10) == 27) break; // stop capturing by pressing ESC 
+			}
+			// the camera will be closed automatically upon exit
+			// cap.close();
+			return resizeImage(src, NEW_WIDTH);
+			//break;
 		}
+
+
 		else if (tolower(mode) == 'p') {
 			string imPath;
 
@@ -40,7 +60,6 @@ Mat getImage() {
 
 				cout << "enter a path:";
 				getline(cin, imPath);
-				cout << imPath;
 
 				src = imread(imPath);
 				// Verify reading success
@@ -49,13 +68,13 @@ Mat getImage() {
 				}
 			}
 		}
+
+
 		else {
 			cout << "You entered wrong character";
 			cout << "\n";
 		}
 	}
-	//-------------------------------------------------replace
-	return src;
 }
 
 int main() {
