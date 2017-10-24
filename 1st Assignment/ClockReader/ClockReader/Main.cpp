@@ -108,7 +108,7 @@ Mat getImage() {
 			string imPath;
 
 			while (true) {
-				cout << "Enter a relative path:";
+				cout << "Enter a relative path:  ";
 				getline(cin, imPath);
 
 				src = imread(imPath);
