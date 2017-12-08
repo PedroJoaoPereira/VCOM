@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = 0;
+	MODE = COMPUTE_VOCABULARY;
 
 	switch (MODE) {
 		case COMPUTE_VOCABULARY:
@@ -54,6 +54,17 @@ int main(int argc, char** argv) {
 		{
 			// Train classifier from dataset vocabulary
 			cout << "Mode: Train Classifier From Dataset Vocabulary" << endl;
+
+			// Load trainning images path
+			vector<string> labels = vector<string>();
+			vector<string> imageDirs = vector<string>();
+			loadTrainningImagesPath(".\\AID", labels, imageDirs);
+
+			// Load vocabulary
+			Mat vocabulary;
+			FileStorage fs(".\\dictionary.yml", FileStorage::READ);
+			fs["dictionary"] >> vocabulary;
+
 			break;
 		}
 		case ONLY_IMAGE_DETECTION:
@@ -105,10 +116,8 @@ void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered)
 	Ptr<SIFT> siftObj = SIFT::create();
 
 	// Iterate through images to train
-	#pragma omp parallel for schedule(dynamic)
-	for (int i = 0; i < imageDirs.size(); i++) {
-		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
-
+	#pragma omp parallel for schedule(dynamic, 3)
+	for (int i = 0; i < imageDirs.size(); i = i + 4) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
 		if (!imageToTrain.data)
@@ -121,8 +130,12 @@ void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered)
 
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
-		// Saves the image descriptors
-		featuresUnclustered.push_back(descriptors);
+		#pragma omp critical
+		{
+			// Saves the image descriptors
+			featuresUnclustered.push_back(descriptors);
+			cout << "Detecting features of image " << (i + 1) / 4 << " / " << imageDirs.size() / 4 << endl;
+		}
 	}
 }
 
@@ -132,7 +145,7 @@ void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered) {
 
 	// Cluster a bag of words with kmeans
 	Mat vocabulary;
-	kmeans(featuresUnclustered, 150, Mat(), TermCriteria(), 1, KMEANS_PP_CENTERS, vocabulary);
+	kmeans(featuresUnclustered, 300, Mat(), TermCriteria(), 1, KMEANS_PP_CENTERS, vocabulary);
 
 	// Store dictionary
 	FileStorage fs(dictionaryDirectory + "dictionary.yml", FileStorage::WRITE);
