@@ -191,6 +191,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	Mat* bagOfWords = new Mat[imageDirs.size()];
 
 	// Prepare data to train machine
+	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i++) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
