@@ -23,8 +23,8 @@ static const int ONLY_IMAGE_DETECTION = 2;
 static const int MULTIPLE_IMAGE_DETECTION = 3;
 
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs);
-void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered);
-void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered);
+Mat* detectFeaturesOfDataset(vector<string> imageDirs);
+void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
 
 int main(int argc, char** argv) {
@@ -33,13 +33,13 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = COMPUTE_VOCABULARY;
+	MODE = TRAIN_CLASSIFIER;
 
 	switch (MODE) {
 		case COMPUTE_VOCABULARY:
 		{
 			// Create vocabulary from dataset
-			cout << "Mode: Create Vocabulary From Dataset" << endl;
+			cout << "[STARTING] Mode: Create Vocabulary From Dataset" << endl;
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
@@ -47,17 +47,18 @@ int main(int argc, char** argv) {
 			loadTrainningImagesPath(".\\AID", labels, imageDirs);
 
 			// Detects features of dataset images
-			Mat featuresUnclustered = Mat();
-			detectFeaturesOfDataset(imageDirs, featuresUnclustered);
+			Mat* featuresUnclustered = detectFeaturesOfDataset(imageDirs);
 
 			// Train with image features
 			createVocabulary(".\\", featuresUnclustered);
+
+			cout << "[ENDING] Mode: Create Vocabulary From Dataset" << endl;
 			break;
 		}
 		case TRAIN_CLASSIFIER:
 		{
 			// Train classifier from dataset vocabulary
-			cout << "Mode: Train Classifier From Dataset Vocabulary" << endl;
+			cout << "[STARTING] Mode: Train Classifier From Dataset Vocabulary" << endl;
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
@@ -72,6 +73,7 @@ int main(int argc, char** argv) {
 			// Machine learning SVM
 			trainMachine(labels, imageDirs, vocabulary);
 
+			cout << "[ENDING] Mode: Train Classifier From Dataset Vocabulary" << endl;
 			break;
 		}
 		case ONLY_IMAGE_DETECTION:
@@ -117,12 +119,15 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 	}
 }
 
-void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered) {
+Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 
 	// Create SIFT features detector
 	Ptr<SIFT> siftObj = SIFT::create();
 
+	Mat* featuresUnclustered = new Mat[imageDirs.size() / 2];
+
 	// Iterate through images to train
+	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i = i + 2) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
@@ -137,18 +142,20 @@ void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered)
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
 		// Saves the image descriptors
-		featuresUnclustered.push_back(descriptors);
+		featuresUnclustered[i / 2] = descriptors;
 		cout << "Detecting features of image " << (i + 1) / 2 << " / " << imageDirs.size() / 2 << endl;
 	}
+
+	return featuresUnclustered;
 }
 
-void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered) {
+void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered) {
 
 	cout << "Creating vocabulary of images ... " << endl;
 
 	// Cluster a bag of words with kmeans
-	Mat vocabulary;
-	kmeans(featuresUnclustered, 100, Mat(), TermCriteria(), 1, KMEANS_PP_CENTERS, vocabulary);
+	BOWKMeansTrainer bowTrainer(100, TermCriteria(), 1, KMEANS_PP_CENTERS);
+	Mat vocabulary = bowTrainer.cluster(*featuresUnclustered);
 
 	// Store dictionary
 	FileStorage fs(dictionaryDirectory + "dictionary.yml", FileStorage::WRITE);
@@ -175,7 +182,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 
 	// Store image labels
 	int labelIndex = 0;
-	Mat labelsMat(labels.size(), 1, CV_32FC1);
+	int* labelsArr = new int[labels.size()];
 
 	// Create SVM object
 	Ptr<SVM> svm = SVM::create();
@@ -184,9 +191,10 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 100, 1e-6));
 
 	// Bag of words
-	Mat bagOfWords = Mat();
+	Mat* bagOfWords = new Mat[imageDirs.size()];
 
 	// Prepare data to train machine
+	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i++) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
@@ -201,23 +209,29 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		siftObj->detect(imageToTrain, keypoints);
 		bowDE.compute(imageToTrain, keypoints, descriptors);
 
-		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
-
 		// Saves to bag of words
-		bagOfWords.push_back(descriptors);
+		bagOfWords[i] = descriptors;
 		// Saves label
 		if (i - 1 >= 0 && !labels.at(i - 1).compare(labels.at(i)))
 			labelIndex++;
-		labelsMat.push_back(labelIndex);
+		labelsArr[i] = labelIndex;
 
 		cout << "Detecting features of image " << i << " / " << imageDirs.size() << endl;
 	}
 
+	// Labels Mat for SVM train
+	Mat labelsMat(labels.size(), 1, CV_32S, labelsArr);
+	// Prepare train data for SVM train
+	Mat trainData;
+	for (int i = 0; i < imageDirs.size(); i++) {
+		trainData.push_back(bagOfWords[i]);
+	}
+
 	// SVM trainning
-	svm->train(bagOfWords, ROW_SAMPLE, labelsMat);
+	svm->train(trainData, ROW_SAMPLE, labelsMat);
 
 	// Save SVM model
-	svm->save(".\\svm.xml");
+	svm->save("svm.xml");
 
 	// Parse labels to get only unique labels
 	vector<string> labelsToExport = vector<string>();
@@ -229,8 +243,9 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	// Save labels
 	ofstream outFile;
 	outFile.open("labels.txt");
-	for (int i = 0; i < labelsToExport.size(); i++) {
+	for (int i = 0; i < labelsToExport.size() - 1; i++) {
 		outFile << labelsToExport.at(i) << endl;
 	}
+	outFile << labelsToExport.at(labelsToExport.size() - 1);
 	outFile.close();
 }
