@@ -124,6 +124,7 @@ Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 	Mat* featuresUnclustered = new Mat[imageDirs.size() / 2];
 
 	// Iterate through images to train
+	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i = i + 2) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
@@ -138,7 +139,7 @@ Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
 		// Saves the image descriptors
-		featuresUnclustered[i / 2].push_back(descriptors);
+		featuresUnclustered[i / 2] = descriptors;
 		cout << "Detecting features of image " << (i + 1) / 2 << " / " << imageDirs.size() / 2 << endl;
 	}
 
@@ -207,7 +208,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
 		// Saves to bag of words
-		bagOfWords[i].push_back(descriptors);
+		bagOfWords[i] = descriptors;
 		// Saves label
 		if (i - 1 >= 0 && !labels.at(i - 1).compare(labels.at(i)))
 			labelIndex++;
