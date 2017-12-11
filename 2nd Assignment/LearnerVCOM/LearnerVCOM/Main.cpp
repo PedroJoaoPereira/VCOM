@@ -27,7 +27,7 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
 void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
-string predictFeature(vector<string> &labels, Ptr<SVM> &svm, Mat &image);
+string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image);
 
 int main(int argc, char** argv) {
 	// Read calling arguments
@@ -102,8 +102,40 @@ int main(int argc, char** argv) {
 			}
 			inFile.close();
 
-			// Predict image
+			// Load vocabulary
+			Mat vocabulary;
+			FileStorage fs(".\\dictionary.yml", FileStorage::READ);
+			fs["dictionary"] >> vocabulary;
 
+			// Create SIFT features detector
+			Ptr<SIFT> siftObj = SIFT::create();
+
+			// Create SIFT features detector
+			Ptr<DescriptorExtractor> extractor = SIFT::create();
+			// Create Flann based matcher
+			Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
+			// Bag of words descriptor and extractor
+			BOWImgDescriptorExtractor bowDE(extractor, matcher);
+
+			// Sets previously obtained vocabulary	
+			bowDE.setVocabulary(vocabulary);
+
+			// Create SVM object
+			Ptr<SVM> svm = SVM::create();
+			svm->load(".\\svm.xml");
+
+			// Loads image in grayscale
+			Mat imageToPredict = imread(".\\Beach_Test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+			if (!imageToPredict.data) {
+				cout << "[ERROR] Mode: Detect Feature Of Image" << endl;
+				cout << "[ERROR] Reason: Could Not Load Image" << endl;
+				return -1;
+			}
+
+			// Predict image
+			string featureLabel = predictFeature(labels, siftObj, bowDE, svm, imageToPredict);
+
+			cout << "This image is: " << featureLabel << endl;
 
 			cout << "[ENDING] Mode: Detect Feature Of Image" << endl;
 			break;
@@ -279,10 +311,18 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	outFile.close();
 }
 
-string predictFeature(vector<string> &labels, Ptr<SVM> &svm, Mat &image) {
+string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image) {
 
-	// Prepare image to be predicted
-	//resize(image, image, Size(600, 600));
+	// Detects image keypoints
+	vector<KeyPoint> keypoints;
+	// Creates descriptors from image keypoints
+	Mat descriptors;
 
-	return "";
+	siftObj->detect(image, keypoints);
+	bowDE.compute(image, keypoints, descriptors);
+
+	// Detect feature
+	int response = svm->predict(descriptors);
+
+	return labels.at(response);
 }
