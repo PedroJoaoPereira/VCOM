@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <sstream>
 #include <fstream>
+#include <iterator>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -26,6 +27,7 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
 void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
+string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image);
 
 int main(int argc, char** argv) {
 	// Read calling arguments
@@ -33,7 +35,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = TRAIN_CLASSIFIER;
+	MODE = COMPUTE_VOCABULARY;
 
 	switch (MODE) {
 		case COMPUTE_VOCABULARY:
@@ -78,8 +80,64 @@ int main(int argc, char** argv) {
 		}
 		case ONLY_IMAGE_DETECTION:
 		{
-			// Create vocabulary from dataset
-			cout << "Mode: Create Vocabulary From Dataset" << endl;
+			// Detect feature of image
+			cout << "[STARTING] Mode: Detect Feature Of Image" << endl;
+
+			// Opens labels file
+			ifstream inFile;
+			inFile.open("labels.txt");
+
+			// Verifies file
+			if (!inFile) {
+				cout << "[ERROR] Mode: Detect Feature Of Image" << endl;
+				cout << "[ERROR] Reason: File Not Valid" << endl;
+				return -1;
+			}
+
+			// Load labels
+			vector<string> labels = vector<string>();
+			string line;
+			while (inFile >> line) {
+				labels.push_back(line);
+			}
+			inFile.close();
+
+			// Load vocabulary
+			Mat vocabulary;
+			FileStorage fs(".\\dictionary.yml", FileStorage::READ);
+			fs["dictionary"] >> vocabulary;
+
+			// Create SIFT features detector
+			Ptr<SIFT> siftObj = SIFT::create();
+
+			// Create SIFT features detector
+			Ptr<DescriptorExtractor> extractor = SIFT::create();
+			// Create Flann based matcher
+			Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
+			// Bag of words descriptor and extractor
+			BOWImgDescriptorExtractor bowDE(extractor, matcher);
+
+			// Sets previously obtained vocabulary	
+			bowDE.setVocabulary(vocabulary);
+
+			// Create SVM object
+			Ptr<SVM> svm = SVM::create();
+			svm->load(".\\svm.xml");
+
+			// Loads image in grayscale
+			Mat imageToPredict = imread(".\\Beach_Test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+			if (!imageToPredict.data) {
+				cout << "[ERROR] Mode: Detect Feature Of Image" << endl;
+				cout << "[ERROR] Reason: Could Not Load Image" << endl;
+				return -1;
+			}
+
+			// Predict image
+			string featureLabel = predictFeature(labels, siftObj, bowDE, svm, imageToPredict);
+
+			cout << "This image is: " << featureLabel << endl;
+
+			cout << "[ENDING] Mode: Detect Feature Of Image" << endl;
 			break;
 		}
 		case MULTIPLE_IMAGE_DETECTION:
@@ -97,6 +155,8 @@ int main(int argc, char** argv) {
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs) {
 
 	cout << "Fetching dataset images paths ..." << endl;
+	
+	int i = 0;
 
 	// Iterate through dataset directory
 	for (auto & fileItem : fs::directory_iterator(datasetDirectory)) {
@@ -115,6 +175,10 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 			// Get images directory and label
 			imageDirs.push_back(ss.str());
 			labels.push_back(label);
+			i++;
+
+			if (i >= 1000)
+				return;
 		}
 	}
 }
@@ -127,7 +191,6 @@ Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 	Mat* featuresUnclustered = new Mat[imageDirs.size() / 2];
 
 	// Iterate through images to train
-	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i = i + 2) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
@@ -154,7 +217,7 @@ void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered) {
 	cout << "Creating vocabulary of images ... " << endl;
 
 	// Cluster a bag of words with kmeans
-	BOWKMeansTrainer bowTrainer(100, TermCriteria(), 1, KMEANS_PP_CENTERS);
+	BOWKMeansTrainer bowTrainer(1000, TermCriteria(), 1, KMEANS_PP_CENTERS);
 	Mat vocabulary = bowTrainer.cluster(*featuresUnclustered);
 
 	// Store dictionary
@@ -177,7 +240,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	// Bag of words descriptor and extractor
 	BOWImgDescriptorExtractor bowDE(extractor, matcher);
 
-	// Sets previously obtained vocabulary
+	// Sets previously obtained vocabulary	
 	bowDE.setVocabulary(vocabulary);
 
 	// Store image labels
@@ -188,13 +251,12 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	Ptr<SVM> svm = SVM::create();
 	svm->setType(SVM::C_SVC);
 	svm->setKernel(SVM::RBF);
-	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 100, 1e-6));
+	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 1000, 1e-6));
 
 	// Bag of words
 	Mat* bagOfWords = new Mat[imageDirs.size()];
 
 	// Prepare data to train machine
-	#pragma omp parallel for schedule(dynamic, 3)
 	for (int i = 0; i < imageDirs.size(); i++) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
@@ -212,20 +274,19 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		// Saves to bag of words
 		bagOfWords[i] = descriptors;
 		// Saves label
-		if (i - 1 >= 0 && !labels.at(i - 1).compare(labels.at(i)))
+		if (i > 0 && labels.at(i - 1).compare(labels.at(i)) != 0)
 			labelIndex++;
 		labelsArr[i] = labelIndex;
 
-		cout << "Detecting features of image " << i << " / " << imageDirs.size() << endl;
+		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
 	}
 
 	// Labels Mat for SVM train
 	Mat labelsMat(labels.size(), 1, CV_32S, labelsArr);
 	// Prepare train data for SVM train
-	Mat trainData;
-	for (int i = 0; i < imageDirs.size(); i++) {
-		trainData.push_back(bagOfWords[i]);
-	}
+	Mat trainData(imageDirs.size(), 1000, CV_32FC1, bagOfWords);
+
+	cout << trainData.cols << " | " << trainData.rows << " | " << labelsMat.rows << endl;
 
 	// SVM trainning
 	svm->train(trainData, ROW_SAMPLE, labelsMat);
@@ -248,4 +309,20 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	}
 	outFile << labelsToExport.at(labelsToExport.size() - 1);
 	outFile.close();
+}
+
+string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image) {
+
+	// Detects image keypoints
+	vector<KeyPoint> keypoints;
+	// Creates descriptors from image keypoints
+	Mat descriptors;
+
+	siftObj->detect(image, keypoints);
+	bowDE.compute(image, keypoints, descriptors);
+
+	// Detect feature
+	int response = svm->predict(descriptors);
+
+	return labels.at(response);
 }
