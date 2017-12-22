@@ -297,13 +297,12 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 	Mat trainData(imageDirs.size(), 1000, CV_32FC1);
 	for (int i = 0; i < imageDirs.size(); i++) {
 		bagOfWords[i].copyTo(trainData.rowRange(i, i + 1).colRange(0, 1000));
-		bagOfWords[i].release();
 	}
+
 	// Labels Mat for train
 	Mat labelsMat(imageDirs.size(), labels.size(), CV_32F);
 	for (int i = 0; i < imageDirs.size(); i++) {
 		labelsArr[i].copyTo(labelsMat.rowRange(i, i + 1).colRange(0, labels.size()));
-		labelsArr[i].release();
 	}
 
 	// Create layers for neural network
@@ -349,11 +348,16 @@ void predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptor
 	// Creates descriptors from image keypoints
 	Mat descriptors;
 
+	// Calculate histogram
 	siftObj->detect(image, keypoints);
 	bowDE.compute(image, keypoints, descriptors);
 
+	// Normalize histogram
+	Mat normalizedHistogram;
+	normalize(descriptors, normalizedHistogram, 0, descriptors.rows, NORM_MINMAX, -1, Mat());
+
 	// Detect feature
-	float response = mlp->predict(descriptors);
+	float response = mlp->predict(normalizedHistogram);
 
 	cout << response << endl;
 }
