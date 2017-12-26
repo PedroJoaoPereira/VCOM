@@ -25,8 +25,9 @@ static const int ONLY_IMAGE_DETECTION = 3;
 static const int MULTIPLE_IMAGE_DETECTION = 4;
 
 static const int VOCABULARY_WORDS = 1000;
+static const string VOCABULARY_DESCRIPTORS_PATH = "Vocabulary_Descriptors";
 static const string DESCRIPTORS_PATH = "Calculated_Descriptors";
-static const string LABELS_PATH = "ImageLabels.txt";
+static const string LABELS_FILENAME = "ImageLabels.txt";
 
 void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vector<string> &imageLabels, vector<string> &imageDirs);
 void calculateImageDescriptors(string savingDirectory, vector<string> &imageDirs);
@@ -49,7 +50,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = CALCULATE_VOCABULARY;
+	MODE = CALCULATE_DESCRIPTORS;
 
 	switch (MODE) {
 		case CALCULATE_DESCRIPTORS:
@@ -60,16 +61,17 @@ int main(int argc, char** argv) {
 			// Load images to calculate the descriptors
 			vector<string> imageLabels = vector<string>();
 			vector<string> imageDirs = vector<string>();
-			loadImagesDirFromPath(".\\AID", true, 1, imageLabels, imageDirs);
+			loadImagesDirFromPath(".\\AID", false, 2, imageLabels, imageDirs);
 
 			// Calculates images descriptors
-			fs::create_directory(DESCRIPTORS_PATH);
-			calculateImageDescriptors(DESCRIPTORS_PATH + "\\", imageDirs);
+			fs::create_directory(VOCABULARY_DESCRIPTORS_PATH);
+			fs::create_directory(VOCABULARY_DESCRIPTORS_PATH + "\\" + DESCRIPTORS_PATH);
+			calculateImageDescriptors(VOCABULARY_DESCRIPTORS_PATH + "\\" + DESCRIPTORS_PATH + "\\", imageDirs);
 
 			// Save image labels
 			cout << "Saving Image Labels To A File ..." << endl;
 			ofstream outFile;
-			outFile.open(LABELS_PATH);
+			outFile.open(VOCABULARY_DESCRIPTORS_PATH + "\\" + LABELS_FILENAME);
 			for (int i = 0; i < imageLabels.size() - 1; i++) {
 				outFile << imageLabels.at(i) << endl;
 			}
@@ -87,7 +89,7 @@ int main(int argc, char** argv) {
 
 			// Load image labels
 			ifstream inFile;
-			inFile.open(LABELS_PATH);
+			inFile.open(VOCABULARY_DESCRIPTORS_PATH + "\\" + LABELS_FILENAME);
 			if (!inFile) {
 				cout << "[ERROR] Mode: Vocabulary Calculator - Lacking Labels File" << endl;
 				break;
@@ -102,7 +104,7 @@ int main(int argc, char** argv) {
 			// Load calculated descriptors
 			Mat descriptors;
 			for (int i = 0; i < imageLabels.size(); i++) {
-				string descriptorFileName = DESCRIPTORS_PATH + "\\" + "descriptor" + to_string(i) + ".yml";
+				string descriptorFileName = VOCABULARY_DESCRIPTORS_PATH + "\\" + DESCRIPTORS_PATH + "\\" + "descriptor" + to_string(i) + ".yml";
 				Mat imageDescriptor;
 				FileStorage fsImageDescriptor(descriptorFileName, FileStorage::READ);
 				fsImageDescriptor["descriptor"] >> imageDescriptor;
@@ -131,7 +133,7 @@ int main(int argc, char** argv) {
 
 			// Load image labels
 			ifstream inFile;
-			inFile.open(LABELS_PATH);
+			inFile.open(LABELS_FILENAME);
 			if (!inFile) {
 				cout << "[ERROR] Mode: Classifier Model Calculator - Lacking Labels File" << endl;
 				break;
@@ -304,8 +306,8 @@ void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vec
 			}
 
 			// DEBUG
-			if (imageDirs.size() >= 5)
-				return;
+			/*if (imageDirs.size() >= 5)
+				return;*/
 
 			// Step through the dataset
 			if(!isCustom)
