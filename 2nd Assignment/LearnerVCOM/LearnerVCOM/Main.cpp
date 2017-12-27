@@ -17,11 +17,13 @@ namespace fs = std::experimental::filesystem;
 
 static int MODE = -1;
 static const int CALCULATE_DESCRIPTORS = 0;
-static const int CALCULATE_VOCABULARY = 1;
-static const int CALCULATE_HISTOGRAMS = 2;
-static const int CALCULATE_MODEL = 3;
+static const int CALCULATE_DESCRIPTORS_MAT = 1;
+static const int CALCULATE_VOCABULARY = 2;
+static const int CALCULATE_HISTOGRAMS = 3;
+static const int CALCULATE_TRAINDATA = 4;
+static const int CALCULATE_MODEL = 5;
 
-static const int VOCABULARY_WORDS = 1000;
+static const int VOCABULARY_WORDS = 1500;
 static const string VOCABULARY_DESCRIPTORS_PATH = "Vocabulary_Descriptors";
 static const string DESCRIPTORS_PATH = "Calculated_Descriptors";
 static const string MODEL_HISTOGRAMS_PATH = "Model_Descriptors";
@@ -30,6 +32,9 @@ static const string LABELS_FILENAME = "ImageLabels.txt";
 static const string UNIQUE_LABELS_FILENAME = "UniqueImageLabels.txt";
 static const string RESPONSES_FILENAME = "Responses.txt";
 static const string MODEL_PATH = "Model_Result";
+
+void MatRead(string filename, Mat &result);
+void MatWrite(string filename, Mat &mat);
 
 void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vector<string> &imageLabels, vector<string> &imageDirs);
 void calculateImageDescriptors(string savingDirectory, vector<string> &imageDirs);
@@ -42,7 +47,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = CALCULATE_HISTOGRAMS;
+	MODE = CALCULATE_DESCRIPTORS;
 
 	switch (MODE) {
 		case CALCULATE_DESCRIPTORS:
@@ -53,7 +58,7 @@ int main(int argc, char** argv) {
 			// Load images to calculate the descriptors
 			vector<string> imageLabels = vector<string>();
 			vector<string> imageDirs = vector<string>();
-			loadImagesDirFromPath(".\\AID", false, 2, imageLabels, imageDirs);
+			loadImagesDirFromPath(".\\AID", false, 4, imageLabels, imageDirs);
 
 			// Calculates images descriptors
 			fs::create_directory(VOCABULARY_DESCRIPTORS_PATH);
@@ -74,18 +79,22 @@ int main(int argc, char** argv) {
 			cout << "[ENDING] Mode: Descriptors Calculator" << endl;
 			break;
 		}
-		case CALCULATE_VOCABULARY:
+		case CALCULATE_DESCRIPTORS_MAT:
 		{
-			// Initializes vocabulary calculator
-			cout << "[STARTING] Mode: Vocabulary Calculator" << endl;
+			// Initializes mat for vocabulary calculator
+			cout << "[STARTING] Mode: Prepare Mat For Vocabulary Calculator" << endl;
 
 			// Load image labels
 			ifstream inFile;
 			inFile.open(VOCABULARY_DESCRIPTORS_PATH + "\\" + LABELS_FILENAME);
 			if (!inFile) {
-				cout << "[ERROR] Mode: Vocabulary Calculator - Lacking Labels File" << endl;
+				cout << "[ERROR] Mode: Prepare Mat For Vocabulary Calculator - Lacking Labels File" << endl;
 				break;
 			}
+			
+			cout << "Reading Image Labels ..." << endl;
+
+			// Read image labels from file
 			vector<string> imageLabels = vector<string>();
 			string line;
 			while (inFile >> line) {
@@ -93,28 +102,50 @@ int main(int argc, char** argv) {
 			}
 			inFile.close();
 
-			cout << "Loading descriptors ..." << endl;
-
 			// Load calculated descriptors
 			Mat descriptors;
 			for (int i = 0; i < imageLabels.size(); i++) {
-				string descriptorFileName = VOCABULARY_DESCRIPTORS_PATH + "\\" + DESCRIPTORS_PATH + "\\" + "descriptor" + to_string(i) + ".yml";
+				string descriptorFileName = VOCABULARY_DESCRIPTORS_PATH + "\\" + DESCRIPTORS_PATH
+					+ "\\" + "descriptor" + to_string(i) + ".bin";
+
+				cout << "Loading Features Of Image " << i + 1 << " / " << imageLabels.size() << endl;
+
+				// Loads the descriptor
 				Mat imageDescriptor;
-				FileStorage fsImageDescriptor(descriptorFileName, FileStorage::READ);
-				fsImageDescriptor["descriptor"] >> imageDescriptor;
-				fsImageDescriptor.release();
+				MatRead(descriptorFileName, imageDescriptor);
+
+				// Saves descriptor in the result Mat
 				descriptors.push_back(imageDescriptor);
 			}
 
+			// Save descriptors Mat
+			cout << "Saving Descriptors Mat To A File ..." << endl;
+			MatWrite(VOCABULARY_DESCRIPTORS_PATH + "\\" + "merged_descriptors.bin", descriptors);
+
+			// Finalizes mat for vocabulary calculator
+			cout << "[ENDING] Mode: Prepare Mat For Vocabulary Calculator" << endl;
+			break;
+		}
+		case CALCULATE_VOCABULARY:
+		{
+			// Initializes vocabulary calculator
+			cout << "[STARTING] Mode: Vocabulary Calculator" << endl;
+			cout << "Vocabulary k = " << VOCABULARY_WORDS << endl;
+
+			cout << "Loading Merged Descriptors Mat ..." << endl;
+
+			// Load the merged descriptors Mat
+			string mergedDescriptorsFileName = VOCABULARY_DESCRIPTORS_PATH + "\\" + "merged_descriptors.bin";
+			Mat mergedDescriptors;
+			MatRead(mergedDescriptorsFileName, mergedDescriptors);
+
 			// Calculate vocabulary
 			Mat vocabulary;
-			calculateVocabulary(descriptors, vocabulary);
+			calculateVocabulary(mergedDescriptors, vocabulary);
 
 			// Save vocabulary Mat
 			cout << "Saving Vocabulary To A File ..." << endl;
-			FileStorage fsVocabulary(VOCABULARY_DESCRIPTORS_PATH + "\\" + "vocabulary.yml", FileStorage::WRITE);
-			fsVocabulary << "vocabulary" << vocabulary;
-			fsVocabulary.release();
+			MatWrite(VOCABULARY_DESCRIPTORS_PATH + "\\" + "vocabulary.bin", vocabulary);
 
 			// Finalizes vocabulary calculator
 			cout << "[ENDING] Mode: Vocabulary Calculator" << endl;
@@ -132,13 +163,7 @@ int main(int argc, char** argv) {
 
 			// Load calculated vocabulary
 			Mat vocabulary;
-			FileStorage fsVocabulary(VOCABULARY_DESCRIPTORS_PATH + "\\" + "vocabulary.yml", FileStorage::READ);
-			if (!fsVocabulary.isOpened()) {
-				cout << "[ERROR] Mode: Histograms Calculator - Lacking Vocabulary File" << endl;
-				break;
-			}
-			fsVocabulary["vocabulary"] >> vocabulary;
-			fsVocabulary.release();
+			MatRead(VOCABULARY_DESCRIPTORS_PATH + "\\" + "vocabulary.bin", vocabulary);
 
 			// Create Bag of Words object
 			// Create SIFT features detector
@@ -147,7 +172,7 @@ int main(int argc, char** argv) {
 			Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
 			// Bag of words descriptor and extractor
 			BOWImgDescriptorExtractor bowDE(extractor, matcher);
-			// Sets previously obtained vocabulary	
+			// Sets previously obtained vocabulary
 			bowDE.setVocabulary(vocabulary);
 
 			// Calculates images histograms
@@ -165,22 +190,26 @@ int main(int argc, char** argv) {
 			outFile << imageLabels.at(imageLabels.size() - 1);
 			outFile.close();
 
-			// Finalizes histogra calculator
+			// Finalizes histogram calculator
 			cout << "[ENDING] Mode: Histograms Calculator" << endl;
 			break;
 		}
-		case CALCULATE_MODEL:
+		case CALCULATE_TRAINDATA:
 		{
-			// Initializes model calculator
-			cout << "[STARTING] Mode: Model Calculator" << endl;
+			// Initializes traindata for model calculator
+			cout << "[STARTING] Mode: Prepare Traindata For Model Calculator" << endl;
 
 			// Load image labels
 			ifstream inFile;
 			inFile.open(MODEL_HISTOGRAMS_PATH + "\\" + LABELS_FILENAME);
 			if (!inFile) {
-				cout << "[ERROR] Mode: Model Calculator - Lacking Labels File" << endl;
+				cout << "[ERROR] Mode: Prepare Traindata For Model Calculator - Lacking Labels File" << endl;
 				break;
 			}
+
+			cout << "Reading Image Labels ..." << endl;
+
+			// Read image labels from file
 			vector<string> imageLabels = vector<string>();
 			string line;
 			while (inFile >> line) {
@@ -188,20 +217,23 @@ int main(int argc, char** argv) {
 			}
 			inFile.close();
 
-			cout << "Loading histograms ..." << endl;
-
 			// Unique labels variable
 			vector<string> uniqueLabels;
 			// Load calculated histograms
 			Mat trainData;
 			for (int i = 0; i < imageLabels.size(); i++) {
-				string histogramFileName = MODEL_HISTOGRAMS_PATH + "\\" + HISTOGRAMS_PATH + "\\" + "histogram" + to_string(i) + ".yml";
+				string histogramFileName = MODEL_HISTOGRAMS_PATH + "\\" + HISTOGRAMS_PATH + "\\" + "histogram" + to_string(i) + ".bin";
+
+				cout << "Loading Histogram Of Image " << i + 1 << " / " << imageLabels.size() << endl;
+
+				// Loads the histogram
 				Mat imageHistogram;
-				FileStorage fsImageHistogram(histogramFileName, FileStorage::READ);
-				fsImageHistogram["histogram"] >> imageHistogram;
-				fsImageHistogram.release();
+				MatRead(histogramFileName, imageHistogram);
+
+				// Saves histogram in the training Mat
 				trainData.push_back(imageHistogram);
 
+				// Selects unique labels to a vector
 				if (find(uniqueLabels.begin(), uniqueLabels.end(), imageLabels.at(i)) == uniqueLabels.end())
 					uniqueLabels.push_back(imageLabels.at(i));
 			}
@@ -216,6 +248,61 @@ int main(int argc, char** argv) {
 				imageResponse.at<float>(index) = 1;
 				responses.push_back(imageResponse);
 			}
+
+			cout << "Saving Classes ... " << endl;
+
+			// Save labels
+			ofstream outFile;
+			outFile.open(MODEL_HISTOGRAMS_PATH + "\\" + "UniqueLabels.txt");
+			for (int i = 0; i < uniqueLabels.size() - 1; i++) {
+				outFile << uniqueLabels.at(i) << endl;
+			}
+			outFile << uniqueLabels.at(uniqueLabels.size() - 1);
+			outFile.close();
+
+			cout << "Saving Traindata ... " << endl;
+
+			// Save traindata
+			MatWrite(MODEL_HISTOGRAMS_PATH + "\\" + "traindata.bin", trainData);
+			MatWrite(MODEL_HISTOGRAMS_PATH + "\\" + "responses.bin", responses);
+
+			// Finalizes traindata for model calculator
+			cout << "[ENDING] Mode: Prepare Traindata For Model Calculator" << endl;
+			break;
+		}
+		case CALCULATE_MODEL:
+		{
+			// Initializes model calculator
+			cout << "[STARTING] Mode: Model Calculator" << endl;
+
+			cout << "Loading Trainingdata And Responses ..." << endl;
+
+			// Load traindata
+			Mat trainData;
+			MatRead(MODEL_HISTOGRAMS_PATH + "\\" + "traindata.bin", trainData);
+
+			// Load responses
+			Mat responses;
+			MatRead(MODEL_HISTOGRAMS_PATH + "\\" + "responses.bin", responses);
+
+
+			// Load image unique labels
+			ifstream inFile;
+			inFile.open(MODEL_HISTOGRAMS_PATH + "\\" + "UniqueLabels.txt");
+			if (!inFile) {
+				cout << "[ERROR] Mode: Model Calculator - Lacking Unique Labels File" << endl;
+				break;
+			}
+
+			cout << "Reading Unique Labels ..." << endl;
+
+			// Read image labels from file
+			vector<string> uniqueLabels = vector<string>();
+			string line;
+			while (inFile >> line) {
+				uniqueLabels.push_back(line);
+			}
+			inFile.close();
 
 			// Create layers for neural network
 			Mat_<int> layerSizes(1, 3);
@@ -239,11 +326,11 @@ int main(int argc, char** argv) {
 			string modelResultPath = MODEL_PATH + "\\";
 			fs::create_directory(modelResultPath);
 
-			cout << "Saving Responses ... " << endl;
+			cout << "Saving Classes ... " << endl;
 
 			// Save labels
 			ofstream outFile;
-			outFile.open(modelResultPath + RESPONSES_FILENAME);
+			outFile.open(modelResultPath + "UniqueLabels.txt");
 			for (int i = 0; i < uniqueLabels.size() - 1; i++) {
 				outFile << uniqueLabels.at(i) << endl;
 			}
@@ -263,6 +350,51 @@ int main(int argc, char** argv) {
 
 	system("pause");
 	return 0;
+}
+
+void MatRead(string filename, Mat &result) {
+
+	// Reads binary stram of data
+	ifstream fs(filename, fstream::binary);
+
+	// Loads Mat headers
+	int rows, cols, type, channels;
+	fs.read((char*)&rows, sizeof(int));
+	fs.read((char*)&cols, sizeof(int));
+	fs.read((char*)&type, sizeof(int));
+	fs.read((char*)&channels, sizeof(int));
+
+	// Loads data
+	result = Mat(rows, cols, type);
+	fs.read((char*)result.data, CV_ELEM_SIZE(type) * rows * cols);
+
+	fs.close();
+}
+
+void MatWrite(string filename, Mat &mat) {
+
+	// Writes binary stram of data
+	ofstream fs(filename, fstream::binary);
+
+	// Writes Mat headers
+	int type = mat.type();
+	int channels = mat.channels();
+	fs.write((char*)&mat.rows, sizeof(int));
+	fs.write((char*)&mat.cols, sizeof(int));
+	fs.write((char*)&type, sizeof(int));
+	fs.write((char*)&channels, sizeof(int));
+
+	// Writes data
+	if (mat.isContinuous()) {
+		fs.write(mat.ptr<char>(0), (mat.dataend - mat.datastart));
+	} else {
+		int rowsz = CV_ELEM_SIZE(type) * mat.cols;
+		for (int r = 0; r < mat.rows; ++r) {
+			fs.write(mat.ptr<char>(r), rowsz);
+		}
+	}
+
+	fs.close();
 }
 
 void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vector<string> &imageLabels, vector<string> &imageDirs) {
@@ -337,16 +469,14 @@ void calculateImageDescriptors(string savingDirectory, vector<string> &imageDirs
 		// Calculates descriptors
 		siftObj->detectAndCompute(imageObj, Mat(), keypoints, descriptors);
 		// Saves the image descriptors
-		string descriptorFileName = savingDirectory + "descriptor" + to_string(i) + ".yml";
-		FileStorage fs(descriptorFileName, FileStorage::WRITE);
-		fs << "descriptor" << descriptors;
-		fs.release();
+		string descriptorFileName = savingDirectory + "descriptor" + to_string(i) + ".bin";
+		MatWrite(descriptorFileName, descriptors);
 	}
 }
 
 void calculateVocabulary(Mat &descriptors, Mat &vocabulary) {
 
-	cout << "Creating Descriptors Vocabulary ... " << endl;
+	cout << "Creating Vocabulary ... " << endl;
 
 	// Cluster vocabulary words with kmeans
 	BOWKMeansTrainer bowTrainer(VOCABULARY_WORDS, TermCriteria(), 1, KMEANS_PP_CENTERS);
@@ -383,9 +513,7 @@ void calculateImageHistograms(string savingDirectory, vector<string> &imageDirs,
 		normalize(descriptors, normalizedHistogram, 0, descriptors.rows, NORM_MINMAX, -1, Mat());
 
 		// Saves the image histograms
-		string histogramFileName = savingDirectory + "histogram" + to_string(i) + ".yml";
-		FileStorage fs(histogramFileName, FileStorage::WRITE);
-		fs << "histogram" << descriptors;
-		fs.release();
+		string histogramFileName = savingDirectory + "histogram" + to_string(i) + ".bin";
+		MatWrite(histogramFileName, normalizedHistogram);
 	}
 }
