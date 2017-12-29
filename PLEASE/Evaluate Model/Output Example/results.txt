@@ -1,0 +1,130 @@
+Evaluation results for the processed dataset:
+---------------------------------------------
+Avg Confidence -> 0.85712
+Avg Accuracy -> 0.93333
+---------------------------------------------
+Confusion Matrix:
+Actual,airport,bareland,baseballfield,beach,bridge,center,church,commercial,denseresidential,desert,farmland,forest,industrial,meadow,mediumresidential,mountain,park,parking,playground,pond,port,railwaystation,resort,river,school,sparseresidential,square,stadium,storagetanks,viaduct,All
+airport,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+bareland,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+baseballfield,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+beach,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+bridge,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+center,0,0,0,0,0,2,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+church,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+commercial,0,0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+denseresidential,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+desert,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+farmland,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+forest,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+industrial,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+meadow,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+mediumresidential,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,3
+mountain,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+park,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,0,3
+parking,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,0,3
+playground,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,0,0,3
+pond,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,2,0,0,0,0,0,0,0,0,0,0,3
+port,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,0,3
+railwaystation,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,3
+resort,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,3
+river,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,3
+school,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,3
+sparseresidential,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,3
+square,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,3
+stadium,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,3
+storagetanks,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,3
+viaduct,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,3
+All,3,3,3,3,3,3,5,2,3,3,3,3,4,3,2,3,4,3,3,2,3,3,4,3,3,3,2,3,2,3,90
+---------------------------------------------
+Image Predictions (path - prediction - confidence):
+dataset/1.jpg - mountain - 0.99699
+dataset/2.jpg - mountain - 0.99750
+dataset/3.jpg - mountain - 0.98910
+dataset/4.jpg - park - 0.91047
+dataset/5.jpg - park - 0.96112
+dataset/6.jpg - park - 0.96531
+dataset/7.jpg - viaduct - 0.99853
+dataset/8.jpg - viaduct - 0.99224
+dataset/9.jpg - viaduct - 0.96434
+dataset/10.jpg - storagetanks - 0.99393
+dataset/11.jpg - center - 0.41509
+dataset/12.jpg - storagetanks - 0.88694
+dataset/13.jpg - denseresidential - 0.90537
+dataset/14.jpg - denseresidential - 0.77754
+dataset/15.jpg - denseresidential - 0.57073
+dataset/16.jpg - beach - 0.99708
+dataset/17.jpg - beach - 0.99783
+dataset/18.jpg - beach - 0.98950
+dataset/19.jpg - railwaystation - 0.75478
+dataset/20.jpg - railwaystation - 0.73183
+dataset/21.jpg - railwaystation - 0.79947
+dataset/22.jpg - commercial - 0.98135
+dataset/23.jpg - church - 0.45073
+dataset/24.jpg - commercial - 0.96634
+dataset/25.jpg - meadow - 0.95256
+dataset/26.jpg - meadow - 0.99781
+dataset/27.jpg - meadow - 0.97670
+dataset/28.jpg - pond - 0.55401
+dataset/29.jpg - park - 0.75110
+dataset/30.jpg - pond - 0.59556
+dataset/31.jpg - river - 0.93442
+dataset/32.jpg - river - 0.98599
+dataset/33.jpg - river - 0.62406
+dataset/34.jpg - bridge - 0.99952
+dataset/35.jpg - bridge - 0.99748
+dataset/36.jpg - bridge - 0.95029
+dataset/37.jpg - playground - 0.63450
+dataset/38.jpg - playground - 0.96575
+dataset/39.jpg - playground - 0.96321
+dataset/40.jpg - airport - 0.98555
+dataset/41.jpg - airport - 0.98325
+dataset/42.jpg - airport - 0.89792
+dataset/43.jpg - church - 0.93474
+dataset/44.jpg - church - 0.68325
+dataset/45.jpg - church - 0.76185
+dataset/46.jpg - center - 0.72463
+dataset/47.jpg - center - 0.78979
+dataset/48.jpg - industrial - 0.31280
+dataset/49.jpg - stadium - 0.99951
+dataset/50.jpg - stadium - 0.95326
+dataset/51.jpg - stadium - 0.96458
+dataset/52.jpg - industrial - 0.88629
+dataset/53.jpg - industrial - 0.62894
+dataset/54.jpg - industrial - 0.89376
+dataset/55.jpg - farmland - 0.74385
+dataset/56.jpg - farmland - 0.97171
+dataset/57.jpg - farmland - 0.89630
+dataset/58.jpg - school - 0.82145
+dataset/59.jpg - school - 0.78122
+dataset/60.jpg - school - 0.79818
+dataset/61.jpg - church - 0.40378
+dataset/62.jpg - square - 0.58927
+dataset/63.jpg - square - 0.86268
+dataset/64.jpg - forest - 0.99455
+dataset/65.jpg - forest - 0.85451
+dataset/66.jpg - forest - 0.98614
+dataset/67.jpg - resort - 0.86001
+dataset/68.jpg - resort - 0.83721
+dataset/69.jpg - resort - 0.93772
+dataset/70.jpg - parking - 0.94977
+dataset/71.jpg - parking - 0.99990
+dataset/72.jpg - parking - 0.94965
+dataset/73.jpg - port - 0.91274
+dataset/74.jpg - port - 0.95241
+dataset/75.jpg - port - 0.98404
+dataset/76.jpg - bareland - 0.99484
+dataset/77.jpg - bareland - 0.99882
+dataset/78.jpg - bareland - 0.98109
+dataset/79.jpg - mediumresidential - 0.57987
+dataset/80.jpg - mediumresidential - 0.59161
+dataset/81.jpg - resort - 0.56345
+dataset/82.jpg - sparseresidential - 0.95064
+dataset/83.jpg - sparseresidential - 0.99530
+dataset/84.jpg - sparseresidential - 0.63426
+dataset/85.jpg - desert - 0.67406
+dataset/86.jpg - desert - 0.99989
+dataset/87.jpg - desert - 0.99957
+dataset/88.jpg - baseballfield - 0.95913
+dataset/89.jpg - baseballfield - 0.96165
+dataset/90.jpg - baseballfield - 0.89210
