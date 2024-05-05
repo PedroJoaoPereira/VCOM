@@ -22,10 +22,7 @@ int main() {
 	if (!src.data) {
 		cout << "Image reading error!" << endl;
 		return 1;
-	}
-
-	// Processing image
-	imageProcessment(src);
+	}	
 
 	// Wait for key press
 	cout << "Press any key to exit." << endl;
@@ -108,7 +105,7 @@ Mat getImage() {
 			string imPath;
 
 			while (true) {
-				cout << "Enter a relative path:";
+				cout << "Enter a path:";
 				getline(cin, imPath);
 
 				src = imread(imPath);
@@ -222,6 +219,211 @@ void imageProcessment(Mat src) {
 	Mat srcClock;
 	src.copyTo(srcClock, srcMask);
 
+	// CLOCK HANDS SEGMENTATION --------------------
+	// Converts image to gray scale
+	Mat clockGrayscale;
+	cvtColor(srcClock, clockGrayscale, CV_BGR2GRAY);
+
+	// Canny edge detection
+	Mat clockEdges;
+	Canny(clockGrayscale, clockEdges, 200, 250, 3);
+
+	// Detects staight lines
+	vector<Vec4i> linesUnprocessed;
+	HoughLinesP(clockEdges, linesUnprocessed, 1, CV_PI / 180, 10, 30, 15);
+
+	// Clock display center of mass
+	Rect displayBounding = boundingRect(bestContour);
+	Point displayCenterOfMass = Point(displayBounding.x + displayBounding.width / 2, displayBounding.y + displayBounding.height / 2);
+
+	// Select lines closer to the center of the clock display
+	double linesThreshold = .08;
+	double pivotLineDistance = distanceCalculate(displayCenterOfMass,
+		Point(
+		(src.size().width / 2) * linesThreshold + displayCenterOfMass.x,
+			(src.size().height / 2) * linesThreshold + displayCenterOfMass.y));
+	vector<Vec4i> lines = vector<Vec4i>();
+	for (size_t i = 0; i < linesUnprocessed.size(); i++) {
+		Vec4i l = linesUnprocessed[i];
+		 Point pt1 = Point(l[0], l[1]);
+		 Point pt2 = Point(l[2], l[3]);
+
+		 if (distanceCalculate(pt1, displayCenterOfMass) < pivotLineDistance || distanceCalculate(pt2, displayCenterOfMass) < pivotLineDistance) {
+			 lines.push_back(l);
+		 }
+	}
+
+	// Vector mapping angles and lines
+	vector<pair<double, pair<Vec4i, double>>> anglesVec = vector<pair<double, pair<Vec4i, double>>>();
+
+	// Finds the angles of the lines
+	for (size_t i = 0; i < lines.size(); i++) {
+		Vec4i l = lines[i];
+		Point pt1 = Point(l[0], l[1]);
+		Point pt2 = Point(l[2], l[3]);
+
+		Point distantPoint;
+		if (distanceCalculate(displayCenterOfMass, pt1) > distanceCalculate(displayCenterOfMass, pt2))
+			distantPoint = Point(pt1.x - displayCenterOfMass.x, pt1.y - displayCenterOfMass.y);
+		else
+			distantPoint = Point(pt2.x - displayCenterOfMass.x, pt2.y - displayCenterOfMass.y);
+
+		double radAngle = atan2(distantPoint.y, distantPoint.x) + atan2(1, 0);
+		double degreeAngle = (radAngle * 360) / (2 * CV_PI);
+		if (degreeAngle < 0)
+			degreeAngle += 360;
+
+		anglesVec.push_back(pair<double, pair<Vec4i, double>>(degreeAngle,
+			pair<Vec4i, double>(l, distanceCalculate(displayCenterOfMass, distantPoint))));
+	}
+
+	// Comparator used in sorting algorithm
+	struct ComparatorAngle {
+		bool operator() (pair<double, pair<Vec4i, double>> i, pair<double, pair<Vec4i, double>> j) {
+			return (i.first < j.first);
+		}
+	} comparator;
+
+	// Sorting process
+	sort(anglesVec.begin(), anglesVec.end(), comparator);
+
+	// Remove irrelevant or dup lines
+	double degreeDiff = 6;
+	REPEAT:
+	for (int i = 0; i < anglesVec.size() - 1; i++) {
+		if (abs(anglesVec[i].first - anglesVec[i + 1].first) < degreeDiff) {
+			Vec4i lineTemp;
+			double distanceTemp;
+			if (anglesVec[i].second.second > anglesVec[i + 1].second.second)
+				distanceTemp = anglesVec[i].second.second;
+			else
+				distanceTemp = anglesVec[i + 1].second.second;
+
+			Vec4i l1 = anglesVec[i].second.first;
+			Vec4i l2 = anglesVec[i + 1].second.first;
+			if (distanceCalculate(Point(l1[0], l1[1]), Point(l1[2], l1[3]))
+				> distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3])))
+				lineTemp = l1; 
+			else
+				lineTemp = l2;
+
+			anglesVec[i].swap(pair<double, pair<Vec4i, double>>((anglesVec[i].first + anglesVec[i + 1].first) / 2,
+				pair<Vec4i, double>(lineTemp, distanceTemp)));
+			anglesVec.erase(anglesVec.begin() + (i + 1));
+
+			goto REPEAT;
+		}
+	}
+
+	// Create new defined lines
+	vector<Vec4i> handsLines = vector<Vec4i>();
+	for (int i = 0; i < anglesVec.size(); i++)
+		handsLines.push_back(anglesVec[i].second.first);
+
+	// Show hands detection
+	Mat clockFinalized;
+	srcClock.copyTo(clockFinalized);
+
+	// Calculates times
+	if (anglesVec.size() == 2) {
+		Vec4i l1 = anglesVec[0].second.first;
+		Vec4i l2 = anglesVec[1].second.first;
+
+		if (distanceCalculate(Point(l1[0], l1[1]), Point(l1[2], l1[3]))
+			< distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3]))) {
+			int hour, minutes;
+			hour = anglesVec[0].first * 12 / 360;
+			minutes = anglesVec[1].first * 60 / 360;
+			cout << "Draws hours in blue, minutes in green and seconds in red." << endl;
+			cout << "The clock time is: " << hour << "h " << minutes << "m" << endl << endl;
+
+			// Draws hours blue, minutes green and seconds red
+			Vec4i l1 = anglesVec[0].second.first;
+			line(clockFinalized, Point(l1[0], l1[1]), Point(l1[2], l1[3]), Scalar(255, 0, 0), 2, CV_AA);
+			Vec4i l2 = anglesVec[1].second.first;
+			line(clockFinalized, Point(l2[0], l2[1]), Point(l2[2], l2[3]), Scalar(0, 255, 0), 2, CV_AA);
+		} else {
+			int hour, minutes;
+			hour = anglesVec[1].first * 12 / 360;
+			minutes = anglesVec[0].first * 60 / 360;
+			cout << "Draws hours in blue, minutes in green and seconds in red." << endl;
+			cout << "The clock time is: " << hour << "h " << minutes << "m" << endl << endl;
+
+			// Draws hours blue, minutes green and seconds red
+			Vec4i l1 = anglesVec[1].second.first;
+			line(clockFinalized, Point(l1[0], l1[1]), Point(l1[2], l1[3]), Scalar(255, 0, 0), 2, CV_AA);
+			Vec4i l2 = anglesVec[0].second.first;
+			line(clockFinalized, Point(l2[0], l2[1]), Point(l2[2], l2[3]), Scalar(0, 255, 0), 2, CV_AA);
+		}
+
+		// Draws center of clock display
+		circle(clockFinalized, displayCenterOfMass, 2, Scalar(255, 255, 255), 2);
+
+	} else if (anglesVec.size() == 3) {
+		pair<double, pair<Vec4i, double>> secondsPair;
+		double distanceHandPoint = 0;
+		for (int i = 0; i < anglesVec.size(); i++) {
+			Vec4i l = anglesVec[i].second.first;
+			Point pt1 = Point(l[0], l[1]);
+			Point pt2 = Point(l[2], l[3]);
+
+			Point closerPoint;
+			if (distanceCalculate(displayCenterOfMass, pt1) < distanceCalculate(displayCenterOfMass, pt2))
+				closerPoint = pt1;
+			else
+				closerPoint = pt2;
+
+			if (distanceHandPoint < distanceCalculate(displayCenterOfMass, closerPoint)) {
+				secondsPair = anglesVec[i];
+				distanceHandPoint = distanceCalculate(displayCenterOfMass, closerPoint);
+			}
+		}
+
+		vector<pair<double, pair<Vec4i, double>>> handsTemp = vector<pair<double, pair<Vec4i, double>>>();
+		for (int i = 0; i < anglesVec.size(); i++) {
+			if (anglesVec[i].first != secondsPair.first)
+				handsTemp.push_back(anglesVec[i]);
+		}
+
+		if (handsTemp[0].second.second < handsTemp[1].second.second) {
+			int hour, minutes, seconds;
+			hour = handsTemp[0].first * 12 / 360;
+			minutes = handsTemp[1].first * 60 / 360;
+			seconds = secondsPair.first * 60 / 360;
+			cout << "Draws hours in blue, minutes in green and seconds in red." << endl;
+			cout << "The clock time is: " << hour << "h " << minutes << "m " << seconds << "s" << endl << endl;
+
+			// Draws hours blue, minutes green and seconds red
+			Vec4i l1 = handsTemp[0].second.first;
+			line(clockFinalized, Point(l1[0], l1[1]), Point(l1[2], l1[3]), Scalar(255, 0, 0), 2, CV_AA);
+			Vec4i l2 = handsTemp[1].second.first;
+			line(clockFinalized, Point(l2[0], l2[1]), Point(l2[2], l2[3]), Scalar(0, 255, 0), 2, CV_AA);
+			Vec4i l3 = secondsPair.second.first;
+			line(clockFinalized, Point(l3[0], l3[1]), Point(l3[2], l3[3]), Scalar(0, 0, 255), 2, CV_AA);
+		} else {
+			int hour, minutes, seconds;
+			hour = handsTemp[1].first * 12 / 360;
+			minutes = handsTemp[0].first * 60 / 360;
+			seconds = secondsPair.first * 60 / 360;
+			cout << "Draws hours in blue, minutes in green and seconds in red." << endl;
+			cout << "The clock time is: " << hour << "h " << minutes << "m " << seconds << "s" << endl << endl;
+
+			// Draws hours blue, minutes green and seconds red
+			Vec4i l1 = handsTemp[1].second.first;
+			line(clockFinalized, Point(l1[0], l1[1]), Point(l1[2], l1[3]), Scalar(255, 0, 0), 2, CV_AA);
+			Vec4i l2 = handsTemp[0].second.first;
+			line(clockFinalized, Point(l2[0], l2[1]), Point(l2[2], l2[3]), Scalar(0, 255, 0), 2, CV_AA);
+			Vec4i l3 = secondsPair.second.first;
+			line(clockFinalized, Point(l3[0], l3[1]), Point(l3[2], l3[3]), Scalar(0, 0, 255), 2, CV_AA);
+		}
+
+		// Draws center of clock display
+		circle(clockFinalized, displayCenterOfMass, 2, Scalar(255, 255, 255), 2);
+
+	} else
+		cout << "Something went wrong!" << endl;
+
+
 	// DEBUGGING -----------------------------------
 	// IMAGE PREPARATION
 	imshow("Original", src); // original image
@@ -235,4 +437,9 @@ void imageProcessment(Mat src) {
 	//imshow("Raw Mask", srcRawMask); // noisy mask of the face of the clock
 	//imshow("Mask", srcMask); // noise clear from the mask
 	imshow("Clock", srcClock); // segments clock face from the background
+
+	// CLOCK HANDS SEGMENTATION
+	//imshow("Clock Grayscale", clockGrayscale); // converts image to grayscale
+	//imshow("Clock Edges", clockEdges); // finds clock display's edges with canny detector
+	imshow("Clock Hands", clockFinalized); // finalized detection
 }
