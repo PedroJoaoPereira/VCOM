@@ -24,7 +24,7 @@ static const int MULTIPLE_IMAGE_DETECTION = 3;
 
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs);
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
-void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered);
+void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
 
 int main(int argc, char** argv) {
@@ -39,7 +39,7 @@ int main(int argc, char** argv) {
 		case COMPUTE_VOCABULARY:
 		{
 			// Create vocabulary from dataset
-			cout << "Mode: Create Vocabulary From Dataset" << endl;
+			cout << "[STARTING] Mode: Create Vocabulary From Dataset" << endl;
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
@@ -50,7 +50,9 @@ int main(int argc, char** argv) {
 			Mat* featuresUnclustered = detectFeaturesOfDataset(imageDirs);
 
 			// Train with image features
-			createVocabulary(".\\", *featuresUnclustered);
+			createVocabulary(".\\", featuresUnclustered);
+
+			cout << "[ENDING] Mode: Create Vocabulary From Dataset" << endl;
 			break;
 		}
 		case TRAIN_CLASSIFIER:
@@ -146,13 +148,13 @@ Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 	return featuresUnclustered;
 }
 
-void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered) {
+void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered) {
 
 	cout << "Creating vocabulary of images ... " << endl;
 
 	// Cluster a bag of words with kmeans
-	Mat vocabulary;
-	kmeans(featuresUnclustered, 100, Mat(), TermCriteria(), 1, KMEANS_PP_CENTERS, vocabulary);
+	BOWKMeansTrainer bowTrainer(100, TermCriteria(), 1, KMEANS_PP_CENTERS);
+	Mat vocabulary = bowTrainer.cluster(*featuresUnclustered);
 
 	// Store dictionary
 	FileStorage fs(dictionaryDirectory + "dictionary.yml", FileStorage::WRITE);
