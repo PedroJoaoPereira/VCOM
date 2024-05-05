@@ -296,6 +296,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 	// Train Data for train
 	Mat trainData(imageDirs.size(), 1000, CV_32FC1);
 	for (int i = 0; i < imageDirs.size(); i++) {
+		cout << i << endl;
 		bagOfWords[i].copyTo(trainData.rowRange(i, i + 1).colRange(0, 1000));
 	}
 
