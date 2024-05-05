@@ -1,9 +1,7 @@
 #include <string>
 #include <iostream>
 #include <filesystem>
-#include <sstream>
 #include <fstream>
-#include <iterator>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -11,17 +9,33 @@
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/ml.hpp>
 
+using namespace std;
 using namespace cv;
 using namespace cv::xfeatures2d;
 using namespace cv::ml;
-using namespace std;
 namespace fs = std::experimental::filesystem;
 
 static int MODE = -1;
-static const int COMPUTE_VOCABULARY = 0;
-static const int TRAIN_CLASSIFIER = 1;
-static const int ONLY_IMAGE_DETECTION = 2;
-static const int MULTIPLE_IMAGE_DETECTION = 3;
+static const int CALCULATE_DESCRIPTORS = 0;
+static const int CALCULATE_VOCABULARY = 1;
+static const int CALCULATE_MODEL = 2;
+
+static const int TRAIN_CLASSIFIER = 5;
+static const int ONLY_IMAGE_DETECTION = 3;
+static const int MULTIPLE_IMAGE_DETECTION = 4;
+
+static const int VOCABULARY_WORDS = 1000;
+static const string DESCRIPTORS_PATH = "Calculated_Descriptors";
+static const string LABELS_PATH = "ImageLabels.txt";
+
+void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vector<string> &imageLabels, vector<string> &imageDirs);
+void calculateImageDescriptors(string savingDirectory, vector<string> &imageDirs);
+void calculateVocabulary(Mat &descriptors, Mat &vocabulary);
+void calculateNormalizedHistogram(Mat &descriptor, BOWImgDescriptorExtractor &bowDE, Mat &histogram);
+
+
+
+void calculateModelClassifier(Mat &descriptors, Mat &vocabulary);
 
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs);
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
@@ -35,27 +49,131 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = TRAIN_CLASSIFIER;
+	MODE = CALCULATE_VOCABULARY;
 
 	switch (MODE) {
-		case COMPUTE_VOCABULARY:
+		case CALCULATE_DESCRIPTORS:
 		{
-			// Create vocabulary from dataset
-			cout << "[STARTING] Mode: Create Vocabulary From Dataset" << endl;
+			// Initializes descriptors calculator
+			cout << "[STARTING] Mode: Descriptors Calculator" << endl;
 
-			// Load trainning images path
-			vector<string> labels = vector<string>();
+			// Load images to calculate the descriptors
 			vector<string> imageLabels = vector<string>();
 			vector<string> imageDirs = vector<string>();
-			loadTrainningImagesPath(".\\AID", labels, imageLabels, imageDirs);
+			loadImagesDirFromPath(".\\AID", true, 1, imageLabels, imageDirs);
 
-			// Detects features of dataset images
-			Mat* featuresUnclustered = detectFeaturesOfDataset(imageDirs);
+			// Calculates images descriptors
+			fs::create_directory(DESCRIPTORS_PATH);
+			calculateImageDescriptors(DESCRIPTORS_PATH + "\\", imageDirs);
 
-			// Train with image features
-			createVocabulary(".\\", featuresUnclustered);
+			// Save image labels
+			cout << "Saving Image Labels To A File ..." << endl;
+			ofstream outFile;
+			outFile.open(LABELS_PATH);
+			for (int i = 0; i < imageLabels.size() - 1; i++) {
+				outFile << imageLabels.at(i) << endl;
+			}
+			outFile << imageLabels.at(imageLabels.size() - 1);
+			outFile.close();
 
-			cout << "[ENDING] Mode: Create Vocabulary From Dataset" << endl;
+			// Finalizes descriptors calculator
+			cout << "[ENDING] Mode: Descriptors Calculator" << endl;
+			break;
+		}
+		case CALCULATE_VOCABULARY:
+		{
+			// Initializes vocabulary calculator
+			cout << "[STARTING] Mode: Vocabulary Calculator" << endl;
+
+			// Load image labels
+			ifstream inFile;
+			inFile.open(LABELS_PATH);
+			if (!inFile) {
+				cout << "[ERROR] Mode: Vocabulary Calculator - Lacking Labels File" << endl;
+				break;
+			}
+			vector<string> imageLabels = vector<string>();
+			string line;
+			while (inFile >> line) {
+				imageLabels.push_back(line);
+			}
+			inFile.close();
+
+			// Load calculated descriptors
+			Mat descriptors;
+			for (int i = 0; i < imageLabels.size(); i++) {
+				string descriptorFileName = DESCRIPTORS_PATH + "\\" + "descriptor" + to_string(i) + ".yml";
+				Mat imageDescriptor;
+				FileStorage fsImageDescriptor(descriptorFileName, FileStorage::READ);
+				fsImageDescriptor["descriptor"] >> imageDescriptor;
+				fsImageDescriptor.release();
+				descriptors.push_back(imageDescriptor);
+			}
+
+			// Calculate vocabulary
+			Mat vocabulary;
+			calculateVocabulary(descriptors, vocabulary);
+
+			// Save vocabulary Mat
+			cout << "Saving Vocabulary To A File ..." << endl;
+			FileStorage fsVocabulary("vocabulary.yml", FileStorage::WRITE);
+			fsVocabulary << "vocabulary" << vocabulary;
+			fsVocabulary.release();
+
+			// Finalizes vocabulary calculator
+			cout << "[ENDING] Mode: Vocabulary Calculator" << endl;
+			break;
+		}
+		case CALCULATE_MODEL:
+		{
+			// Initializes model calculator
+			cout << "[STARTING] Mode: Classifier Model Calculator" << endl;
+
+			// Load image labels
+			ifstream inFile;
+			inFile.open(LABELS_PATH);
+			if (!inFile) {
+				cout << "[ERROR] Mode: Classifier Model Calculator - Lacking Labels File" << endl;
+				break;
+			}
+			vector<string> imageLabels = vector<string>();
+			string line;
+			while (inFile >> line) {
+				imageLabels.push_back(line);
+			}
+			inFile.close();
+
+			// Load calculated vocabulary
+			Mat vocabulary;
+			FileStorage fsVocabulary(".\\vocabulary.yml", FileStorage::READ);
+			fsVocabulary["vocabulary"] >> vocabulary;
+			fsVocabulary.release();
+
+			// Load calculated descriptors
+			Mat trainData;
+			for (int i = 0; i < imageLabels.size(); i++) {
+				string descriptorFileName = DESCRIPTORS_PATH + "\\" + "descriptor" + to_string(i) + ".yml";
+				Mat imageDescriptor;
+				FileStorage fsImageDescriptor(descriptorFileName, FileStorage::READ);
+				fsImageDescriptor["descriptor"] >> imageDescriptor;
+				fsImageDescriptor.release();
+
+				// TODO
+				// COMPUTE NORMALIZED HISTOGRAM FROM VOCABULARY
+
+
+
+
+
+
+				//trainData.push_back();
+			}
+
+			// Calculate model classifier
+			// TODO
+
+			// Finalizes model calculator
+			cout << "[ENDING] Mode: Classifier Model Calculator" << endl;
 			break;
 		}
 		case TRAIN_CLASSIFIER:
@@ -146,18 +264,157 @@ int main(int argc, char** argv) {
 			cout << "Mode: Create Vocabulary From Dataset" << endl;
 			break;
 		}
-	}	
+	}
 
 	system("pause");
 	return 0;
 }
+
+void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vector<string> &imageLabels, vector<string> &imageDirs) {
+
+	if (step <= 0)
+		return;
+
+	cout << "Loading Images Directories ..." << endl;
+
+	// Used variables
+	int index = 0;
+
+	// Iterate through dataset directory
+	for (auto & fileItem : fs::directory_iterator(datasetDirectory)) {
+		stringstream ss = stringstream();
+		ss << fileItem;
+
+		// Get label of images
+		string label = ss.str();
+		label = label.substr(label.find_last_of("\\") + 1);
+
+		// Iterate through a labeled image directory
+		for (auto & imageItem : fs::directory_iterator(fileItem)) {
+			stringstream ss = stringstream();
+			ss << imageItem;
+
+			// Get images directory and label
+			if (!isCustom && index % step == 0) {
+				imageDirs.push_back(ss.str());
+				imageLabels.push_back(label);
+			} else if (isCustom) {
+				imageDirs.push_back(ss.str());
+				imageLabels.push_back(label);
+			}
+
+			// DEBUG
+			if (imageDirs.size() >= 5)
+				return;
+
+			// Step through the dataset
+			if(!isCustom)
+				index++;
+			else {
+				if (index < step - 1)
+					index++;
+				else {
+					index = 0;
+					break;
+				}
+			}
+		}
+	}
+}
+
+void calculateImageDescriptors(string savingDirectory, vector<string> &imageDirs) {
+
+	cout << "Calculating Images Descriptors ..." << endl;
+
+	// Create SIFT features detector
+	Ptr<SIFT> siftObj = SIFT::create();
+
+	// Iterate through images to train
+	for (int i = 0; i < imageDirs.size(); i++) {
+		// Loads image in grayscale
+		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
+		if (!imageToTrain.data)
+			continue;
+
+		// Detects image keypoints
+		vector<KeyPoint> keypoints;
+		// Creates descriptors from image keypoints
+		Mat descriptorsTemp;
+
+		cout << "Detecting And Saving Features Of Image " << i + 1 << " / " << imageDirs.size() << endl;
+
+		// Calculates descriptors
+		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptorsTemp);
+		// Saves the image descriptors
+		string descriptorFileName = savingDirectory + "descriptor" + to_string(i) + ".yml";
+		FileStorage fs(descriptorFileName, FileStorage::WRITE);
+		fs << "descriptor" << descriptorsTemp;
+		fs.release();
+	}
+}
+
+void calculateVocabulary(Mat &descriptors, Mat &vocabulary) {
+
+	cout << "Creating Descriptors Vocabulary ... " << endl;
+
+	// Cluster vocabulary words with kmeans
+	BOWKMeansTrainer bowTrainer(VOCABULARY_WORDS, TermCriteria(), 1, KMEANS_PP_CENTERS);
+	vocabulary = bowTrainer.cluster(descriptors);
+}
+
+void calculateNormalizedHistogram(Mat &descriptor, BOWImgDescriptorExtractor &bowDE, Mat &histogram) {
+
+	// TODO
+	// https://stackoverflow.com/questions/15611872/bow-in-opencv-using-precomputed-features
+
+	/*
+	bowDE.compute(descriptor);
+
+	// Normalize histogram
+	Mat normalizedHistogram;
+	normalize(descriptors, normalizedHistogram, 0, descriptors.rows, NORM_MINMAX, -1, Mat());
+
+	// Saves to bag of words
+	trainData.push_back(normalizedHistogram);
+
+	// Saves label
+	int labelIndex = find(labels.begin(), labels.end(), imageLabels.at(i)) - labels.begin();
+	// Create binary label
+	Mat imageLabel = Mat::zeros(Size((int)labels.size(), 1), CV_32F);
+	imageLabel.at<float>(labelIndex) = 1;
+	labelsArr[i] = imageLabel;
+
+	cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
+	*/
+}
+
+void calculateModelClassifier(Mat &descriptors, Mat &vocabulary) {
+
+	cout << "Creating Classifier Model ... " << endl;
+
+	// Create SIFT features detector
+	Ptr<SIFT> siftObj = SIFT::create();
+
+	// Create SIFT features detector
+	Ptr<DescriptorExtractor> extractor = SIFT::create();
+	// Create Flann based matcher
+	Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("FlannBased");
+	// Bag of words descriptor and extractor
+	BOWImgDescriptorExtractor bowDE(extractor, matcher);
+
+	// Sets previously obtained vocabulary	
+	bowDE.setVocabulary(vocabulary);
+}
+
+
+
 
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs) {
 
 	cout << "Fetching dataset images paths ..." << endl;
 	
 	// DEBUG
-	int i = 0;
+	//int i = 0;
 
 	// Iterate through dataset directory
 	for (auto & fileItem : fs::directory_iterator(datasetDirectory)) {
@@ -169,8 +426,8 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 		label = label.substr(label.find_last_of("\\") + 1);
 
 		// DEBUG
-		if (imageDirs.size() >= 720)
-			return;
+		/*if (imageDirs.size() >= 720)
+			return;*/
 
 		labels.push_back(label);
 
@@ -184,11 +441,11 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 			imageLabels.push_back(label);
 
 			// DEBUG
-			i++;
+			/*i++;
 			if (i >= 24) {
 				i = 0;
 				break;
-			}
+			}*/
 		}
 	}
 }
@@ -253,11 +510,12 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 	// Sets previously obtained vocabulary	
 	bowDE.setVocabulary(vocabulary);
 
+	// DEBUG
+	// Train Data for train
+	Mat trainData;
+
 	// Store image labels
 	Mat* labelsArr = new Mat[imageDirs.size()];
-
-	// Bag of words
-	Mat* bagOfWords = new Mat[imageDirs.size()];
 
 	// Prepare data to train machine
 	for (int i = 0; i < imageDirs.size(); i++) {
@@ -282,7 +540,8 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 		normalize(descriptors, normalizedHistogram, 0, descriptors.rows, NORM_MINMAX, -1, Mat());
 
 		// Saves to bag of words
-		bagOfWords[i] = normalizedHistogram;
+		trainData.push_back(normalizedHistogram);
+
 		// Saves label
 		int labelIndex = find(labels.begin(), labels.end(), imageLabels.at(i)) - labels.begin();
 		// Create binary label
@@ -291,13 +550,6 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 		labelsArr[i] = imageLabel;
 
 		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
-	}
-
-	// Train Data for train
-	Mat trainData(imageDirs.size(), 1000, CV_32FC1);
-	for (int i = 0; i < imageDirs.size(); i++) {
-		cout << i << endl;
-		bagOfWords[i].copyTo(trainData.rowRange(i, i + 1).colRange(0, 1000));
 	}
 
 	// Labels Mat for train
