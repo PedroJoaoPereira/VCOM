@@ -27,7 +27,7 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
 void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs, Mat &vocabulary);
-string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image);
+void predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<ANN_MLP> &mlp, Mat &image);
 
 int main(int argc, char** argv) {
 	// Read calling arguments
@@ -122,9 +122,9 @@ int main(int argc, char** argv) {
 			// Sets previously obtained vocabulary	
 			bowDE.setVocabulary(vocabulary);
 
-			// Create SVM object
-			Ptr<SVM> svm = SVM::create();
-			svm->load(".\\svm.xml");
+			// Create neural network
+			Ptr<ANN_MLP> mlp = ANN_MLP::create();
+			mlp->load(".\\model.yaml");
 
 			// Loads image in grayscale
 			Mat imageToPredict = imread(".\\Beach_Test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
@@ -135,9 +135,7 @@ int main(int argc, char** argv) {
 			}
 
 			// Predict image
-			string featureLabel = predictFeature(labels, siftObj, bowDE, svm, imageToPredict);
-
-			cout << "This image is: " << featureLabel << endl;
+			predictFeature(labels, siftObj, bowDE, mlp, imageToPredict);
 
 			cout << "[ENDING] Mode: Detect Feature Of Image" << endl;
 			break;
@@ -266,8 +264,10 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 	for (int i = 0; i < imageDirs.size(); i++) {
 		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
-		if (!imageToTrain.data)
-			continue;
+		if (!imageToTrain.data) {
+			cout << "Error could not read image " + i << endl;
+			return;
+		}
 
 		// Detects image keypoints
 		vector<KeyPoint> keypoints;
@@ -292,6 +292,8 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 		labelsArr[i] = imageLabel;
 
 		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
+
+		cout << normalizedHistogram.row << " | " << normalizedHistogram.cols << " | " << imageDirs.size() << endl;
 	}
 
 	// Train Data for train
@@ -343,7 +345,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 	outFile.close();
 }
 
-string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image) {
+void predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<ANN_MLP> &mlp, Mat &image) {
 
 	// Detects image keypoints
 	vector<KeyPoint> keypoints;
@@ -354,7 +356,7 @@ string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescript
 	bowDE.compute(image, keypoints, descriptors);
 
 	// Detect feature
-	int response = svm->predict(descriptors);
+	float response = mlp->predict(descriptors);
 
-	return labels.at(response);
+	cout << response << endl;
 }
