@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = CALCULATE_VOCABULARY;
+	MODE = CALCULATE_HISTOGRAMS;
 
 	switch (MODE) {
 		case CALCULATE_DESCRIPTORS:
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
 
 			// Load calculated vocabulary
 			Mat vocabulary;
-			FileStorage fsVocabulary(".\\vocabulary.yml", FileStorage::READ);
+			FileStorage fsVocabulary(VOCABULARY_DESCRIPTORS_PATH + "\\" + "vocabulary.yml", FileStorage::READ);
 			if (!fsVocabulary.isOpened()) {
 				cout << "[ERROR] Mode: Histograms Calculator - Lacking Vocabulary File" << endl;
 				break;
@@ -206,12 +206,15 @@ int main(int argc, char** argv) {
 					uniqueLabels.push_back(imageLabels.at(i));
 			}
 
+			cout << "Creating Responses ... " << endl;
+
 			// Create responses
 			Mat responses;
 			for (int i = 0; i < imageLabels.size(); i++) {
-				Mat imageLabel = Mat::zeros(Size((int)uniqueLabels.size(), 1), CV_32F);
-				imageLabel.at<float>(i) = 1;
-				responses.push_back(imageLabel);
+				Mat imageResponse = Mat::zeros(Size((int)uniqueLabels.size(), 1), CV_32F);
+				int index = find(uniqueLabels.begin(), uniqueLabels.end(), imageLabels.at(i)) - uniqueLabels.begin();
+				imageResponse.at<float>(index) = 1;
+				responses.push_back(imageResponse);
 			}
 
 			// Create layers for neural network
@@ -227,6 +230,8 @@ int main(int argc, char** argv) {
 			mlp->setTrainMethod(ANN_MLP::BACKPROP, 0.1, 0.1);
 			Ptr<TrainData> trainDataObj = TrainData::create(trainData, ROW_SAMPLE, responses);
 
+			cout << "Training Model ... " << endl;
+
 			// Train with data
 			mlp->train(trainDataObj);
 
@@ -234,8 +239,7 @@ int main(int argc, char** argv) {
 			string modelResultPath = MODEL_PATH + "\\";
 			fs::create_directory(modelResultPath);
 
-			// Save SVM model
-			mlp->save(modelResultPath + "model.yaml");
+			cout << "Saving Responses ... " << endl;
 
 			// Save labels
 			ofstream outFile;
@@ -245,6 +249,11 @@ int main(int argc, char** argv) {
 			}
 			outFile << uniqueLabels.at(uniqueLabels.size() - 1);
 			outFile.close();
+
+			cout << "Saving Model ... " << endl;
+
+			// Save SVM model
+			mlp->save(modelResultPath + "model.yaml");
 
 			// Finalizes model calculator
 			cout << "[ENDING] Mode: Model Calculator" << endl;
@@ -288,10 +297,6 @@ void loadImagesDirFromPath(string datasetDirectory, bool isCustom, int step, vec
 				imageDirs.push_back(ss.str());
 				imageLabels.push_back(label);
 			}
-
-			// DEBUG
-			/*if (imageDirs.size() >= 5)
-				return;*/
 
 			// Step through the dataset
 			if(!isCustom)
