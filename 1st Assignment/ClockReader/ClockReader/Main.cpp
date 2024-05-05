@@ -22,7 +22,10 @@ int main() {
 	if (!src.data) {
 		cout << "Image reading error!" << endl;
 		return 1;
-	}	
+	}
+
+	// Image processment
+	imageProcessment(src);
 
 	// Wait for key press
 	cout << "Press any key to exit." << endl;
@@ -56,9 +59,9 @@ Mat resizeImage(Mat original, int newWidth) {
 	Size newSize;
 
 	newSize.width = newWidth;
-	newSize.height = newWidth*1.0 / original.size().width*original.size().height;
+	newSize.height = newWidth / original.cols * original.rows;
 
-	resize(original, resizedImage, newSize);
+	resize(original, resizedImage, Size(400, 400));
 
 	return resizedImage;
 }
@@ -112,7 +115,10 @@ Mat getImage() {
 
 				// Verify reading success
 				if (src.data)
-					return resizeImage(src, NEW_WIDTH);
+					if (src.size().width > NEW_WIDTH)
+						return resizeImage(src, NEW_WIDTH);
+					else
+						return src;
 			}
 		}else {
 			cout << "You entered wrong character" << endl;
@@ -150,6 +156,15 @@ void imageProcessment(Mat src) {
 	// Threshold the image to binary
 	Mat srcThreshold;
 	threshold(srcGray, srcThreshold, 170, 255, THRESH_BINARY);
+
+	// DEBUGGING -----------------------------------
+	// IMAGE PREPARATION
+	imshow("Original", src); // original image
+	//imshow("Contrast", srcContrast); // contrasted image
+	//imshow("Blur", srcBlur); // noise blur from the image
+	//imshow("Mean Filter", srcMeanFilter); // cluster image colors
+	//imshow("Gray", srcGray); // grayscales image
+	//imshow("Threshold", srcThreshold); // binarize image
 
 	// CLOCK SEGMENTATION --------------------------
 	// Find all contours from edges
@@ -219,6 +234,13 @@ void imageProcessment(Mat src) {
 	Mat srcClock;
 	src.copyTo(srcClock, srcMask);
 
+	// DEBUGGING -----------------------------------
+	// CLOCK SEGMENTATION
+	//imshow("Raw Mask", srcRawMask); // noisy mask of the face of the clock
+	//imshow("Mask", srcMask); // noise clear from the mask
+	imshow("Clock", srcClock); // segments clock face from the background
+
+	// CLOCK HANDS SEGMENTATION --------------------
 	// CLOCK HANDS SEGMENTATION --------------------
 	// Converts image to gray scale
 	Mat clockGrayscale;
@@ -245,12 +267,12 @@ void imageProcessment(Mat src) {
 	vector<Vec4i> lines = vector<Vec4i>();
 	for (size_t i = 0; i < linesUnprocessed.size(); i++) {
 		Vec4i l = linesUnprocessed[i];
-		 Point pt1 = Point(l[0], l[1]);
-		 Point pt2 = Point(l[2], l[3]);
+		Point pt1 = Point(l[0], l[1]);
+		Point pt2 = Point(l[2], l[3]);
 
-		 if (distanceCalculate(pt1, displayCenterOfMass) < pivotLineDistance || distanceCalculate(pt2, displayCenterOfMass) < pivotLineDistance) {
-			 lines.push_back(l);
-		 }
+		if (distanceCalculate(pt1, displayCenterOfMass) < pivotLineDistance || distanceCalculate(pt2, displayCenterOfMass) < pivotLineDistance) {
+			lines.push_back(l);
+		}
 	}
 
 	// Vector mapping angles and lines
@@ -303,7 +325,7 @@ void imageProcessment(Mat src) {
 			Vec4i l2 = anglesVec[i + 1].second.first;
 			if (distanceCalculate(Point(l1[0], l1[1]), Point(l1[2], l1[3]))
 				> distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3])))
-				lineTemp = l1; 
+				lineTemp = l1;
 			else
 				lineTemp = l2;
 
@@ -423,21 +445,7 @@ void imageProcessment(Mat src) {
 	} else
 		cout << "Something went wrong!" << endl;
 
-
 	// DEBUGGING -----------------------------------
-	// IMAGE PREPARATION
-	imshow("Original", src); // original image
-	//imshow("Contrast", srcContrast); // contrasted image
-	//imshow("Blur", srcBlur); // noise blur from the image
-	//imshow("Mean Filter", srcMeanFilter); // cluster image colors
-	//imshow("Gray", srcGray); // grayscales image
-	//imshow("Threshold", srcThreshold); // binarize image
-
-	// CLOCK SEGMENTATION
-	//imshow("Raw Mask", srcRawMask); // noisy mask of the face of the clock
-	//imshow("Mask", srcMask); // noise clear from the mask
-	imshow("Clock", srcClock); // segments clock face from the background
-
 	// CLOCK HANDS SEGMENTATION
 	//imshow("Clock Grayscale", clockGrayscale); // converts image to grayscale
 	//imshow("Clock Edges", clockEdges); // finds clock display's edges with canny detector
