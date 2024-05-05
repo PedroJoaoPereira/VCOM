@@ -35,7 +35,6 @@ int main() {
 	images.push_back(imread("./Resources/img5.jpg"));
 	images.push_back(imread("./Resources/img6.jpg"));
 	images.push_back(imread("./Resources/img10.jpg"));
-	images.push_back(imread("./Resources/img11.jpg"));
 
 	for (int index = 0; index < images.size(); index++) {
 		// IMAGE READING -------------------------------
