@@ -169,8 +169,8 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 		label = label.substr(label.find_last_of("\\") + 1);
 
 		// DEBUG
-		/*if (imageDirs.size() >= 6)
-			return;*/
+		if (imageDirs.size() >= 720)
+			return;
 
 		labels.push_back(label);
 
@@ -185,10 +185,9 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 
 			// DEBUG
 			i++;
-			if (i >= 700) {
-				return;
-				/*i = 0;
-				break;*/
+			if (i >= 24) {
+				i = 0;
+				break;
 			}
 		}
 	}
@@ -292,20 +291,18 @@ void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<st
 		labelsArr[i] = imageLabel;
 
 		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
-
-		cout << normalizedHistogram.row << " | " << normalizedHistogram.cols << " | " << imageDirs.size() << endl;
 	}
 
 	// Train Data for train
 	Mat trainData(imageDirs.size(), 1000, CV_32FC1);
 	for (int i = 0; i < imageDirs.size(); i++) {
-		bagOfWords[i].row(0).copyTo(trainData.row(i));
+		bagOfWords[i].copyTo(trainData.rowRange(i, i + 1).colRange(0, 1000));
 		bagOfWords[i].release();
 	}
 	// Labels Mat for train
 	Mat labelsMat(imageDirs.size(), labels.size(), CV_32F);
 	for (int i = 0; i < imageDirs.size(); i++) {
-		labelsArr[i].row(0).copyTo(labelsMat.row(i));
+		labelsArr[i].copyTo(labelsMat.rowRange(i, i + 1).colRange(0, labels.size()));
 		labelsArr[i].release();
 	}
 
