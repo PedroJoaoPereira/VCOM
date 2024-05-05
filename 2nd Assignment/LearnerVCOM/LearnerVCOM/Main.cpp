@@ -23,10 +23,10 @@ static const int TRAIN_CLASSIFIER = 1;
 static const int ONLY_IMAGE_DETECTION = 2;
 static const int MULTIPLE_IMAGE_DETECTION = 3;
 
-void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs);
+void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs);
 Mat* detectFeaturesOfDataset(vector<string> imageDirs);
 void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered);
-void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
+void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs, Mat &vocabulary);
 string predictFeature(vector<string> &labels, Ptr<SIFT> &siftObj, BOWImgDescriptorExtractor &bowDE, Ptr<SVM> &svm, Mat &image);
 
 int main(int argc, char** argv) {
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = COMPUTE_VOCABULARY;
+	MODE = TRAIN_CLASSIFIER;
 
 	switch (MODE) {
 		case COMPUTE_VOCABULARY:
@@ -45,8 +45,9 @@ int main(int argc, char** argv) {
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
+			vector<string> imageLabels = vector<string>();
 			vector<string> imageDirs = vector<string>();
-			loadTrainningImagesPath(".\\AID", labels, imageDirs);
+			loadTrainningImagesPath(".\\AID", labels, imageLabels, imageDirs);
 
 			// Detects features of dataset images
 			Mat* featuresUnclustered = detectFeaturesOfDataset(imageDirs);
@@ -64,8 +65,9 @@ int main(int argc, char** argv) {
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
+			vector<string> imageLabels = vector<string>();
 			vector<string> imageDirs = vector<string>();
-			loadTrainningImagesPath(".\\AID", labels, imageDirs);
+			loadTrainningImagesPath(".\\AID", labels, imageLabels, imageDirs);
 
 			// Load vocabulary
 			Mat vocabulary;
@@ -73,7 +75,7 @@ int main(int argc, char** argv) {
 			fs["dictionary"] >> vocabulary;
 
 			// Machine learning SVM
-			trainMachine(labels, imageDirs, vocabulary);
+			trainMachine(labels, imageLabels, imageDirs, vocabulary);
 
 			cout << "[ENDING] Mode: Train Classifier From Dataset Vocabulary" << endl;
 			break;
@@ -152,10 +154,11 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
-void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs) {
+void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs) {
 
 	cout << "Fetching dataset images paths ..." << endl;
 	
+	// DEBUG
 	int i = 0;
 
 	// Iterate through dataset directory
@@ -167,6 +170,12 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 		string label = ss.str();
 		label = label.substr(label.find_last_of("\\") + 1);
 
+		// DEBUG
+		/*if (imageDirs.size() >= 6)
+			return;*/
+
+		labels.push_back(label);
+
 		// Iterate through a labeled image directory
 		for (auto & imageItem : fs::directory_iterator(fileItem)) {
 			stringstream ss = stringstream();
@@ -174,11 +183,15 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 
 			// Get images directory and label
 			imageDirs.push_back(ss.str());
-			labels.push_back(label);
-			i++;
+			imageLabels.push_back(label);
 
-			if (i >= 1000)
+			// DEBUG
+			i++;
+			if (i >= 700) {
 				return;
+				/*i = 0;
+				break;*/
+			}
 		}
 	}
 }
@@ -226,7 +239,7 @@ void createVocabulary(string dictionaryDirectory, Mat* featuresUnclustered) {
 	fs.release();
 }
 
-void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary) {
+void trainMachine(vector<string> &labels, vector<string> &imageLabels, vector<string> &imageDirs, Mat &vocabulary) {
 
 	cout << "Trainning machine ... " << endl;
 
@@ -244,14 +257,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	bowDE.setVocabulary(vocabulary);
 
 	// Store image labels
-	int labelIndex = 0;
-	int* labelsArr = new int[labels.size()];
-
-	// Create SVM object
-	Ptr<SVM> svm = SVM::create();
-	svm->setType(SVM::C_SVC);
-	svm->setKernel(SVM::RBF);
-	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 1000, 1e-6));
+	Mat* labelsArr = new Mat[imageDirs.size()];
 
 	// Bag of words
 	Mat* bagOfWords = new Mat[imageDirs.size()];
@@ -268,31 +274,57 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		// Creates descriptors from image keypoints
 		Mat descriptors;
 
+		// Calculates histogram of words
 		siftObj->detect(imageToTrain, keypoints);
 		bowDE.compute(imageToTrain, keypoints, descriptors);
 
+		// Normalize histogram
+		Mat normalizedHistogram;
+		normalize(descriptors, normalizedHistogram, 0, descriptors.rows, NORM_MINMAX, -1, Mat());
+
 		// Saves to bag of words
-		bagOfWords[i] = descriptors;
+		bagOfWords[i] = normalizedHistogram;
 		// Saves label
-		if (i > 0 && labels.at(i - 1).compare(labels.at(i)) != 0)
-			labelIndex++;
-		labelsArr[i] = labelIndex;
+		int labelIndex = find(labels.begin(), labels.end(), imageLabels.at(i)) - labels.begin();
+		// Create binary label
+		Mat imageLabel = Mat::zeros(Size((int)labels.size(), 1), CV_32F);
+		imageLabel.at<float>(labelIndex) = 1;
+		labelsArr[i] = imageLabel;
 
 		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
 	}
 
-	// Labels Mat for SVM train
-	Mat labelsMat(labels.size(), 1, CV_32S, labelsArr);
-	// Prepare train data for SVM train
-	Mat trainData(imageDirs.size(), 1000, CV_32FC1, bagOfWords);
+	// Train Data for train
+	Mat trainData(imageDirs.size(), 1000, CV_32FC1);
+	for (int i = 0; i < imageDirs.size(); i++) {
+		bagOfWords[i].row(0).copyTo(trainData.row(i));
+		bagOfWords[i].release();
+	}
+	// Labels Mat for train
+	Mat labelsMat(imageDirs.size(), labels.size(), CV_32F);
+	for (int i = 0; i < imageDirs.size(); i++) {
+		labelsArr[i].row(0).copyTo(labelsMat.row(i));
+		labelsArr[i].release();
+	}
 
-	cout << trainData.cols << " | " << trainData.rows << " | " << labelsMat.rows << endl;
+	// Create layers for neural network
+	Mat_<int> layerSizes(1, 3);
+	layerSizes(0, 0) = trainData.cols;
+	layerSizes(0, 1) = trainData.cols / 2;
+	layerSizes(0, 2) = labelsMat.cols;
 
-	// SVM trainning
-	svm->train(trainData, ROW_SAMPLE, labelsMat);
+	// Create neural network
+	Ptr<ANN_MLP> mlp = ANN_MLP::create();
+	mlp->setLayerSizes(layerSizes);
+	mlp->setActivationFunction(ANN_MLP::SIGMOID_SYM, 0.1, 0.1);
+	mlp->setTrainMethod(ANN_MLP::BACKPROP, 0.1, 0.1);
+	Ptr<TrainData> trainDataObj = TrainData::create(trainData, ROW_SAMPLE, labelsMat);
+
+	// Train with data
+	mlp->train(trainDataObj);
 
 	// Save SVM model
-	svm->save("svm.xml");
+	mlp->save("model.yaml");	
 
 	// Parse labels to get only unique labels
 	vector<string> labelsToExport = vector<string>();
