@@ -187,7 +187,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 100, 1e-6));
 
 	// Bag of words
-	Mat bagOfWords = Mat();
+	Mat* bagOfWords = new Mat[imageDirs.size()];
 
 	// Prepare data to train machine
 	for (int i = 0; i < imageDirs.size(); i++) {
@@ -207,7 +207,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
 		// Saves to bag of words
-		bagOfWords.push_back(descriptors);
+		bagOfWords[i].push_back(descriptors);
 		// Saves label
 		if (i - 1 >= 0 && !labels.at(i - 1).compare(labels.at(i)))
 			labelIndex++;
@@ -217,7 +217,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	}
 
 	// SVM trainning
-	svm->train(bagOfWords, ROW_SAMPLE, labelsMat);
+	svm->train(*bagOfWords, ROW_SAMPLE, labelsMat);
 
 	// Save SVM model
 	svm->save(".\\svm.xml");
