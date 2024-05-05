@@ -12,7 +12,6 @@ int main() {
 	image1 = imread("./Resources/img.jpg");
 	if (!image1.data) {
 		cout << "Image reading error !\n";
-
 		waitKey(0);
 		return 1;
 	}
