@@ -13,26 +13,71 @@ using namespace cv::xfeatures2d;
 using namespace std;
 namespace fs = std::experimental::filesystem;
 
-vector<string> labels = vector<string>();
-vector<string> imageDirs = vector<string>();
+static int MODE = -1;
+static const int COMPUTE_VOCABULARY = 0;
+static const int TRAIN_CLASSIFIER = 1;
+static const int ONLY_IMAGE_DETECTION = 2;
+static const int MULTIPLE_IMAGE_DETECTION = 3;
 
-void loadTrainningImagesPath(string datasetDirectory);
-void trainWithImages();
+void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs);
+void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered);
+void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered);
 
 int main(int argc, char** argv) {
 	// Read calling arguments
+	// If it is trainning (n bag of words, dataset...), if it is only recnozing single image or multiple features in image
 	// TODO
 
-	// Load trainning images path
-	loadTrainningImagesPath(".\\AID");
+	// Debug
+	MODE = 0;
+
+	switch (MODE) {
+		case COMPUTE_VOCABULARY:
+		{
+			// Create vocabulary from dataset
+			cout << "Mode: Create Vocabulary From Dataset" << endl;
+
+			// Load trainning images path
+			vector<string> labels = vector<string>();
+			vector<string> imageDirs = vector<string>();
+			loadTrainningImagesPath(".\\AID", labels, imageDirs);
+
+			// Detects features of dataset images
+			Mat featuresUnclustered = Mat();
+			detectFeaturesOfDataset(imageDirs, featuresUnclustered);
+
+			// Train with image features
+			createVocabulary(".\\", featuresUnclustered);
+			break;
+		}
+		case TRAIN_CLASSIFIER:
+		{
+			// Train classifier from dataset vocabulary
+			cout << "Mode: Train Classifier From Dataset Vocabulary" << endl;
+			break;
+		}
+		case ONLY_IMAGE_DETECTION:
+		{
+			// Create vocabulary from dataset
+			cout << "Mode: Create Vocabulary From Dataset" << endl;
+			break;
+		}
+		case MULTIPLE_IMAGE_DETECTION:
+		{
+			// Create vocabulary from dataset
+			cout << "Mode: Create Vocabulary From Dataset" << endl;
+			break;
+		}
+	}	
 
 	system("pause");
 	return 0;
 }
 
-void loadTrainningImagesPath(string datasetDirectory) {
+void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs) {
 
 	cout << "Fetching dataset images paths ..." << endl;
+
 	// Iterate through dataset directory
 	for (auto & fileItem : fs::directory_iterator(datasetDirectory)) {
 		stringstream ss = stringstream();
@@ -54,36 +99,43 @@ void loadTrainningImagesPath(string datasetDirectory) {
 	}
 }
 
-void trainWithImages() {
+void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered) {
 
-	Ptr<SIFT> detector = SIFT::create();
+	// Create SIFT features detector
+	Ptr<SIFT> siftObj = SIFT::create();
 
 	// Iterate through images to train
+	#pragma omp parallel for schedule(dynamic)
 	for (int i = 0; i < imageDirs.size(); i++) {
-		cout << "Trainning with image " << i + 1 << " / " << imageDirs.size() << endl;
+		cout << "Detecting features of image " << i + 1 << " / " << imageDirs.size() << endl;
+
+		// Loads image in grayscale
 		Mat imageToTrain = imread(imageDirs.at(i), CV_LOAD_IMAGE_GRAYSCALE);
 		if (!imageToTrain.data)
 			continue;
 
-		vector<KeyPoint> keypoints = vector<KeyPoint>();
-		detector->detect(imageToTrain, keypoints);
-	}
+		// Detects image keypoints
+		vector<KeyPoint> keypoints;
+		// Creates descriptors from image keypoints
+		Mat descriptors;
 
-	/*
-	Ptr<DescriptorExtractor> extractor = DescriptorExtractor::create("SIFT");
-	//Ptr<FeatureDetector> detector = FeatureDetector::create("SURF");
-	//Ptr<DescriptorExtractor> extractor = DescriptorExtractor::create("SURF");
-	Mat image;
-	std::vector<KeyPoint> keypoints;
-	Mat descriptors;
-	// for cycle to extract from all of the 50k images from the train folder
-	for (int i = 0; i<listOfImages.size(); i++) {
-		if (!openImage("train/" + listOfImages[i], image))
-			continue;
-		cout << "Extracting from Image: " + listOfImages[i] + " of " + to_string(listOfImages.size()) << endl;
-		detector->detect(image, keypoints);
-		extractor->compute(image, keypoints, descriptors);
-		allTrainDescriptors.push_back(descriptors);
+		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
+
+		// Saves the image descriptors
+		featuresUnclustered.push_back(descriptors);
 	}
-	*/
+}
+
+void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered) {
+
+	cout << "Creating vocabulary of images ... " << endl;
+
+	// Cluster a bag of words with kmeans
+	Mat vocabulary;
+	kmeans(featuresUnclustered, 150, Mat(), TermCriteria(), 1, KMEANS_PP_CENTERS, vocabulary);
+
+	// Store dictionary
+	FileStorage fs(dictionaryDirectory + "dictionary.yml", FileStorage::WRITE);
+	fs << "dictionary" << vocabulary;
+	fs.release();
 }
