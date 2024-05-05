@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
 	// TODO
 
 	// Debug
-	MODE = COMPUTE_VOCABULARY;
+	MODE = TRAIN_CLASSIFIER;
 
 	switch (MODE) {
 		case COMPUTE_VOCABULARY:
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
 		case TRAIN_CLASSIFIER:
 		{
 			// Train classifier from dataset vocabulary
-			cout << "Mode: Train Classifier From Dataset Vocabulary" << endl;
+			cout << "[STARTING] Mode: Train Classifier From Dataset Vocabulary" << endl;
 
 			// Load trainning images path
 			vector<string> labels = vector<string>();
@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
 			// Machine learning SVM
 			trainMachine(labels, imageDirs, vocabulary);
 
+			cout << "[ENDING] Mode: Train Classifier From Dataset Vocabulary" << endl;
 			break;
 		}
 		case ONLY_IMAGE_DETECTION:
@@ -181,7 +182,7 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 
 	// Store image labels
 	int labelIndex = 0;
-	Mat labelsMat(labels.size(), 1, CV_32FC1);
+	int* labelsArr = new int[labels.size()];
 
 	// Create SVM object
 	Ptr<SVM> svm = SVM::create();
@@ -208,23 +209,29 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 		siftObj->detect(imageToTrain, keypoints);
 		bowDE.compute(imageToTrain, keypoints, descriptors);
 
-		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
-
 		// Saves to bag of words
 		bagOfWords[i] = descriptors;
 		// Saves label
 		if (i - 1 >= 0 && !labels.at(i - 1).compare(labels.at(i)))
 			labelIndex++;
-		labelsMat.push_back(labelIndex);
+		labelsArr[i] = labelIndex;
 
 		cout << "Detecting features of image " << i << " / " << imageDirs.size() << endl;
 	}
 
+	// Labels Mat for SVM train
+	Mat labelsMat(labels.size(), 1, CV_32S, labelsArr);
+	// Prepare train data for SVM train
+	Mat trainData;
+	for (int i = 0; i < imageDirs.size(); i++) {
+		trainData.push_back(bagOfWords[i]);
+	}
+
 	// SVM trainning
-	svm->train(*bagOfWords, ROW_SAMPLE, labelsMat);
+	svm->train(trainData, ROW_SAMPLE, labelsMat);
 
 	// Save SVM model
-	svm->save(".\\svm.xml");
+	svm->save("svm.xml");
 
 	// Parse labels to get only unique labels
 	vector<string> labelsToExport = vector<string>();
@@ -236,8 +243,9 @@ void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabu
 	// Save labels
 	ofstream outFile;
 	outFile.open("labels.txt");
-	for (int i = 0; i < labelsToExport.size(); i++) {
+	for (int i = 0; i < labelsToExport.size() - 1; i++) {
 		outFile << labelsToExport.at(i) << endl;
 	}
+	outFile << labelsToExport.at(labelsToExport.size() - 1);
 	outFile.close();
 }
