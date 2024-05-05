@@ -23,7 +23,7 @@ static const int ONLY_IMAGE_DETECTION = 2;
 static const int MULTIPLE_IMAGE_DETECTION = 3;
 
 void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, vector<string> &imageDirs);
-void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered);
+Mat* detectFeaturesOfDataset(vector<string> imageDirs);
 void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered);
 void trainMachine(vector<string> &labels, vector<string> &imageDirs, Mat &vocabulary);
 
@@ -47,11 +47,10 @@ int main(int argc, char** argv) {
 			loadTrainningImagesPath(".\\AID", labels, imageDirs);
 
 			// Detects features of dataset images
-			Mat featuresUnclustered = Mat();
-			detectFeaturesOfDataset(imageDirs, featuresUnclustered);
+			Mat* featuresUnclustered = detectFeaturesOfDataset(imageDirs);
 
 			// Train with image features
-			createVocabulary(".\\", featuresUnclustered);
+			createVocabulary(".\\", *featuresUnclustered);
 			break;
 		}
 		case TRAIN_CLASSIFIER:
@@ -117,10 +116,12 @@ void loadTrainningImagesPath(string datasetDirectory, vector<string> &labels, ve
 	}
 }
 
-void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered) {
+Mat* detectFeaturesOfDataset(vector<string> imageDirs) {
 
 	// Create SIFT features detector
 	Ptr<SIFT> siftObj = SIFT::create();
+
+	Mat* featuresUnclustered = new Mat[imageDirs.size() / 2];
 
 	// Iterate through images to train
 	for (int i = 0; i < imageDirs.size(); i = i + 2) {
@@ -137,9 +138,11 @@ void detectFeaturesOfDataset(vector<string> imageDirs, Mat &featuresUnclustered)
 		siftObj->detectAndCompute(imageToTrain, Mat(), keypoints, descriptors);
 
 		// Saves the image descriptors
-		featuresUnclustered.push_back(descriptors);
+		featuresUnclustered[i / 2].push_back(descriptors);
 		cout << "Detecting features of image " << (i + 1) / 2 << " / " << imageDirs.size() / 2 << endl;
 	}
+
+	return featuresUnclustered;
 }
 
 void createVocabulary(string dictionaryDirectory, Mat &featuresUnclustered) {
