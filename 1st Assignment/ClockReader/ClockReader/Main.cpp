@@ -1,85 +1,49 @@
 #include <iostream>
+#include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include <opencv2/opencv.hpp>
 
-using namespace std;
 using namespace cv;
+using namespace std;
 
-const int NEW_WIDTH = 400; // Used to determine width of the picture after resizing, height will be resized proportionaly
+#define SIZE 400
 
-double distanceCalculate(Point p1, Point p2); // Distance between two points
-Mat resizeImage(Mat original, int newWidth); // Resizes the image to width defined by second argument, height set proportionaly
-Mat getImage(); // Returns an image that was taken wth camera or loaded from path specified in console
-
-void imageProcessment(Mat src); // function to process image
-
-int main() {
-	// Reads the image
-	Mat src = getImage();
-
-	// Verify reading success
-	if (!src.data) {
-		cout << "Image reading error!" << endl;
-		return 1;
-	}
-
-	// Image processment
-	imageProcessment(src);
-
-	// Wait for key press
-	cout << "Press any key to exit." << endl;
-	waitKey(0);
-	return 0;
-}
-
-// Distance between two points
+/**
+ * Calculates the distance between two points
+ * @param p1 the first point
+ * @param p2 the second point
+ */
 double distanceCalculate(Point p1, Point p2) {
-
-	double x1 = p1.x;
-	double y1 = p1.y;
-	double x2 = p2.x;
-	double y2 = p2.y;
-
-	double x = x1 - x2;
-	double y = y1 - y2;
-
-	// Calculating Euclidean distance
-	double dist;
-	dist = pow(x, 2) + pow(y, 2);
-	dist = sqrt(dist);
-
-	return dist;
+	double x = p1.x - p2.x;
+	double y = p1.y - p2.y;
+	return sqrt(pow(x, 2) + pow(y, 2));
 }
 
-// Resizes the image to width defined by second argument, height set proportionaly
-Mat resizeImage(Mat original, int newWidth) {
-
+/**
+ * Resizes the image
+ * @param original the image to be resized
+ */
+Mat resizeImage(Mat original) {
 	Mat resizedImage;
-	Size newSize;
-
-	newSize.width = newWidth;
-	newSize.height = newWidth / original.cols * original.rows;
-
-	resize(original, resizedImage, Size(400, 400));
-
+	resize(original, resizedImage, Size(SIZE, SIZE));
 	return resizedImage;
 }
 
-// Returns an image that was taken wth camera or loaded from path specified in console
+/**
+ * Returns an image that was shot with the webcam or loaded from a path specified in the console
+ */
 Mat getImage() {
-
 	char mode;
 	Mat src;
 
 	while (true) {
-		cout << "Please select mode : (C for camera input, P for path):";
+		cout << "Please select mode: (C for camera input, P for path, Q for quit): ";
 		cin >> mode;
 		cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
 		// Camera mode
 		if (tolower(mode) == 'c') {
-			cout << "Press ESC key to take picture" << endl;
+			cout << "Press ESC key to take picture..." << endl;
 
 			VideoCapture cap;
 			// Open the default camera
@@ -101,34 +65,41 @@ Mat getImage() {
 			}
 
 			// The camera will be closed automatically upon exit
-			return resizeImage(src, NEW_WIDTH);
+			return resizeImage(src);
 
-		// Path mode
-		}else if (tolower(mode) == 'p') {
+			// Path mode
+		} else if (tolower(mode) == 'p') {
 			string imPath;
 
 			while (true) {
-				cout << "Enter a path:";
+				cout << "Enter a path: ";
 				getline(cin, imPath);
 
 				src = imread(imPath);
 
 				// Verify reading success
-				if (src.data)
-					if (src.size().width > NEW_WIDTH)
-						return resizeImage(src, NEW_WIDTH);
+				if (src.data) {
+					if (src.size().width > SIZE)
+						return resizeImage(src);
 					else
 						return src;
+				}
 			}
-		}else {
-			cout << "You entered wrong character" << endl;
+		} else if (tolower(mode) == 'q') {
+			exit(0);
+		} else {
+			cout << "You entered an invalid character! Try again." << endl;
 		}
 	}
+
+	return src;
 }
 
-// Function to process image
-void imageProcessment(Mat src) {
-
+/**
+ * Function to process the image
+ * @param src the image to be processed
+ */
+void imageProcessing(Mat src) {
 	// IMAGE PREPARATION ---------------------------
 	// Increases image contrast and brightness for clearer edge detection
 	Mat srcContrast = Mat::zeros(src.size(), src.type());
@@ -136,7 +107,7 @@ void imageProcessment(Mat src) {
 		for (int x = 0; x < src.cols; x++) {
 			for (int c = 0; c < 3; c++) {
 				srcContrast.at<Vec3b>(y, x)[c] =
-					saturate_cast<uchar>(2.2*(src.at<Vec3b>(y, x)[c]) - 100);
+						saturate_cast<uchar>(2.2*(src.at<Vec3b>(y, x)[c]) - 100);
 			}
 		}
 	}
@@ -160,11 +131,11 @@ void imageProcessment(Mat src) {
 	// DEBUGGING -----------------------------------
 	// IMAGE PREPARATION
 	imshow("Original", src); // original image
-	//imshow("Contrast", srcContrast); // contrasted image
-	//imshow("Blur", srcBlur); // noise blur from the image
-	//imshow("Mean Filter", srcMeanFilter); // cluster image colors
-	//imshow("Gray", srcGray); // grayscales image
-	//imshow("Threshold", srcThreshold); // binarize image
+	// imshow("Contrast", srcContrast); // contrasted image
+	// imshow("Blur", srcBlur); // noise blur from the image
+	// imshow("Mean Filter", srcMeanFilter); // cluster image colors
+	// imshow("Gray", srcGray); // grayscales image
+	// imshow("Threshold", srcThreshold); // binarize image
 
 	// CLOCK SEGMENTATION --------------------------
 	// Find all contours from edges
@@ -181,10 +152,10 @@ void imageProcessment(Mat src) {
 
 	// Priority queue mapping contours, its area and its distance to the center of the image
 	priority_queue<pair<double, pair<vector<Point>, double>>,
-		vector<pair<double, pair<vector<Point>, double>>>,
-		CompareArea> pq = priority_queue<pair<double, pair<vector<Point>, double>>,
-		vector<pair<double, pair<vector<Point>, double>>>,
-		CompareArea>();
+			vector<pair<double, pair<vector<Point>, double>>>,
+			CompareArea> pq = priority_queue<pair<double, pair<vector<Point>, double>>,
+			vector<pair<double, pair<vector<Point>, double>>>,
+			CompareArea>();
 
 	// Creates variables for image information
 	Point centerOfImage = Point(src.size().width / 2, src.size().height / 2);
@@ -204,9 +175,9 @@ void imageProcessment(Mat src) {
 	double contourThreshold = .25;
 	vector<Point> bestContour = pq.top().second.first;
 	double pivotDistance = distanceCalculate(centerOfImage,
-		Point(
-		(src.size().width / 2) * contourThreshold + src.size().width / 2,
-			(src.size().height / 2) * contourThreshold + src.size().height / 2));
+	                                         Point(
+			                                         (src.size().width / 2) * contourThreshold + src.size().width / 2,
+			                                         (src.size().height / 2) * contourThreshold + src.size().height / 2));
 	do {
 		pair<double, pair<vector<Point>, double>> pair = pq.top();
 
@@ -236,11 +207,10 @@ void imageProcessment(Mat src) {
 
 	// DEBUGGING -----------------------------------
 	// CLOCK SEGMENTATION
-	//imshow("Raw Mask", srcRawMask); // noisy mask of the face of the clock
-	//imshow("Mask", srcMask); // noise clear from the mask
+	// imshow("Raw Mask", srcRawMask); // noisy mask of the face of the clock
+	// imshow("Mask", srcMask); // noise clear from the mask
 	imshow("Clock", srcClock); // segments clock face from the background
 
-	// CLOCK HANDS SEGMENTATION --------------------
 	// CLOCK HANDS SEGMENTATION --------------------
 	// Converts image to gray scale
 	Mat clockGrayscale;
@@ -261,9 +231,9 @@ void imageProcessment(Mat src) {
 	// Select lines closer to the center of the clock display
 	double linesThreshold = .08;
 	double pivotLineDistance = distanceCalculate(displayCenterOfMass,
-		Point(
-		(src.size().width / 2) * linesThreshold + displayCenterOfMass.x,
-			(src.size().height / 2) * linesThreshold + displayCenterOfMass.y));
+	                                             Point(
+			                                             (src.size().width / 2) * linesThreshold + displayCenterOfMass.x,
+			                                             (src.size().height / 2) * linesThreshold + displayCenterOfMass.y));
 	vector<Vec4i> lines = vector<Vec4i>();
 	for (size_t i = 0; i < linesUnprocessed.size(); i++) {
 		Vec4i l = linesUnprocessed[i];
@@ -296,7 +266,7 @@ void imageProcessment(Mat src) {
 			degreeAngle += 360;
 
 		anglesVec.push_back(pair<double, pair<Vec4i, double>>(degreeAngle,
-			pair<Vec4i, double>(l, distanceCalculate(displayCenterOfMass, distantPoint))));
+		                                                      pair<Vec4i, double>(l, distanceCalculate(displayCenterOfMass, distantPoint))));
 	}
 
 	// Comparator used in sorting algorithm
@@ -324,13 +294,13 @@ void imageProcessment(Mat src) {
 			Vec4i l1 = anglesVec[i].second.first;
 			Vec4i l2 = anglesVec[i + 1].second.first;
 			if (distanceCalculate(Point(l1[0], l1[1]), Point(l1[2], l1[3]))
-				> distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3])))
+			    > distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3])))
 				lineTemp = l1;
 			else
 				lineTemp = l2;
 
-			anglesVec[i].swap(pair<double, pair<Vec4i, double>>((anglesVec[i].first + anglesVec[i + 1].first) / 2,
-				pair<Vec4i, double>(lineTemp, distanceTemp)));
+			pair<double, pair<Vec4i, double>> temp = pair<double, pair<Vec4i, double>>((anglesVec[i].first + anglesVec[i + 1].first) / 2, pair<Vec4i, double>(lineTemp, distanceTemp));
+			anglesVec[i].swap(temp);
 			anglesVec.erase(anglesVec.begin() + (i + 1));
 
 			goto REPEAT;
@@ -352,7 +322,7 @@ void imageProcessment(Mat src) {
 		Vec4i l2 = anglesVec[1].second.first;
 
 		if (distanceCalculate(Point(l1[0], l1[1]), Point(l1[2], l1[3]))
-			< distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3]))) {
+		    < distanceCalculate(Point(l2[0], l2[1]), Point(l2[2], l2[3]))) {
 			int hour, minutes;
 			hour = anglesVec[0].first * 12 / 360;
 			minutes = anglesVec[1].first * 60 / 360;
@@ -447,7 +417,30 @@ void imageProcessment(Mat src) {
 
 	// DEBUGGING -----------------------------------
 	// CLOCK HANDS SEGMENTATION
-	//imshow("Clock Grayscale", clockGrayscale); // converts image to grayscale
-	//imshow("Clock Edges", clockEdges); // finds clock display's edges with canny detector
+	// imshow("Clock Grayscale", clockGrayscale); // converts image to grayscale
+	// imshow("Clock Edges", clockEdges); // finds clock display's edges with canny detector
 	imshow("Clock Hands", clockFinalized); // finalized detection
+}
+
+/**
+ * Application's starting point
+ */
+int main() {
+	// Reads the image
+	Mat src = getImage();
+
+	// Verify reading success
+	if (!src.data) {
+		cout << "ERROR: Image file not found!" << endl;
+		return 1;
+	}
+
+	// Image processing
+	imageProcessing(src);
+
+	// Wait for a key press
+	cout << "Press any key to exit..." << endl;
+	waitKey(0);
+
+	return 0;
 }
