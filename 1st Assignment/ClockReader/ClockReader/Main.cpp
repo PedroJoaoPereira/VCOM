@@ -1,38 +1,102 @@
 #include <iostream>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/opencv.hpp>
 
 using namespace std;
 using namespace cv;
 
-int main() {
-	Mat image1, image2;
+/*
+// Using this to debug
 
-	//read an image
-	image1 = imread("./Resources/img.jpg");
-	if (!image1.data) {
-		cout << "Image reading error !\n";
-		waitKey(0);
+for (int i = 300; i < 450; i = i + 10) {
+	Mat temp;
+	Canny(srcBlur, temp, 50, i, 3);
+	string str = "";
+	str += to_string(i);
+	imshow(str, temp);
+}
+*/
+
+int main() {
+
+	// IMAGE READING -------------------------------
+	// Reads the image
+	Mat src = imread("./Resources/img2.jpg");
+
+	// Verify reading success
+	if (!src.data) {
+		cout << "Image reading error!" << endl;
 		return 1;
 	}
 
-	//show the image on window
-	imshow("Original image", image1);
+	// IMAGE PREPARATION ---------------------------
+	// Noise removal with Gaussian blur
+	Mat srcBlur;
+	GaussianBlur(src, srcBlur, Size(3, 3), 0, 0, BORDER_DEFAULT);
 
-	//show original image size
-	cout << "Original image:\n";
-	cout << "height = " << image1.size().height << endl;
-	cout << "width = " << image1.size().width << endl;
+	// Convert image to grayscale
+	Mat srcGray;
+	cvtColor(srcBlur, srcGray, CV_BGR2GRAY);
 
-	//horizontal flip image1 and save result in image2
-	flip(image1, image2, 1);
+	// Apply Laplacian operator
+	Mat srcLaplacian;
+	Laplacian(srcGray, srcLaplacian, CV_8U, 3, 1, 0, BORDER_DEFAULT);
 
-	//show the image on window
-	imshow("Flipped image", image2);
+	// CLOCK SEGMENTATION --------------------------
+	// Find all clock contours
+	vector<vector<Point>> contours;
+	findContours(srcLaplacian, contours, CV_RETR_LIST, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
-	//save flipped image in 'bmp' format
-	imwrite("img_flip.bmp", image2);
+	// Find the area of larger contour
+	double maxArea = 0;
+	vector<Point> relevantContour;
+	for (int i = 0; i< contours.size(); i++) {
+		double temp = contourArea(contours[i]);
 
+		if (temp > maxArea) {
+			maxArea = temp;
+			relevantContour = contours[i];
+		}
+	}
+
+	// Select inner larger contour
+	double minArea = maxArea;
+	for (int i = 0; i< contours.size(); i++) {
+		double temp = contourArea(contours[i]);
+		if (temp > maxArea * 0.4 && temp < minArea) {
+			minArea = temp;
+			relevantContour = contours[i];
+		}
+	}
+
+	// Clock inner contour
+	vector<vector<Point>> relevantContourVec = vector<vector<Point>>();
+	relevantContourVec.push_back(relevantContour);
+
+	// Create clock mask to segment the background
+	Mat srcRawMask = Mat::zeros(src.size(), CV_8U);
+	drawContours(srcRawMask, relevantContourVec, 0, Scalar(255, 255, 255), CV_FILLED);
+
+	// Close noise in the raw mask
+	Mat srcMask;
+	morphologyEx(srcRawMask, srcMask, MORPH_CLOSE, Mat());
+
+	// Segmenting background
+	Mat srcClock;
+	src.copyTo(srcClock, srcMask);
+
+	// DEBUGGING -----------------------------------
+	// Show the image
+	imshow("Original", src);
+	imshow("Blur", srcBlur);
+	imshow("Gray", srcGray);
+	imshow("Laplacian", srcLaplacian);
+	imshow("Raw Mask", srcRawMask);
+	imshow("Mask", srcMask);
+	imshow("Clock", srcClock);
+
+	// Wait for key press
 	waitKey(0);
 	return 0;
 }
